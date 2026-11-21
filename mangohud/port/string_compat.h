@@ -50,42 +50,42 @@ inline float stof(const std::string& str, std::size_t* idx = nullptr)
 inline std::string to_string(int value)
 {
 	char buffer[32];
-	std::snprintf(buffer, sizeof(buffer), "%d", value);
+	::snprintf(buffer, sizeof(buffer), "%d", value);
 	return buffer;
 }
 
 inline std::string to_string(unsigned value)
 {
 	char buffer[32];
-	std::snprintf(buffer, sizeof(buffer), "%u", value);
+	::snprintf(buffer, sizeof(buffer), "%u", value);
 	return buffer;
 }
 
 inline std::string to_string(long value)
 {
 	char buffer[32];
-	std::snprintf(buffer, sizeof(buffer), "%ld", value);
+	::snprintf(buffer, sizeof(buffer), "%ld", value);
 	return buffer;
 }
 
 inline std::string to_string(unsigned long value)
 {
 	char buffer[32];
-	std::snprintf(buffer, sizeof(buffer), "%lu", value);
+	::snprintf(buffer, sizeof(buffer), "%lu", value);
 	return buffer;
 }
 
 inline std::string to_string(long long value)
 {
 	char buffer[32];
-	std::snprintf(buffer, sizeof(buffer), "%lld", value);
+	::snprintf(buffer, sizeof(buffer), "%lld", value);
 	return buffer;
 }
 
 inline std::string to_string(unsigned long long value)
 {
 	char buffer[32];
-	std::snprintf(buffer, sizeof(buffer), "%llu", value);
+	::snprintf(buffer, sizeof(buffer), "%llu", value);
 	return buffer;
 }
 
