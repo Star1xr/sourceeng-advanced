@@ -793,9 +793,10 @@ parse_overlay_config(struct overlay_params *params,
                   const char *env, bool use_existing_preset)
 {
    std::vector<int> default_preset = {-1, 0, 1, 2, 3, 4};
-   *params = {
-     .preset = use_existing_preset ? params->preset : default_preset
-   };
+   std::vector<int> preset = use_existing_preset ? params->preset : default_preset;
+   overlay_params fresh_params{};
+   fresh_params.preset = preset;
+   *params = fresh_params;
    set_param_defaults(params);
    if (!use_existing_preset) {
       current_preset = params->preset[0];
