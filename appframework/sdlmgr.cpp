@@ -23,6 +23,12 @@
 #include <EGL/egl.h>
 #endif
 
+#if defined( ANDROID ) && defined( TOGLES )
+#include "mangohud/mangohud.h"
+#include <limits.h>
+#include <unistd.h>
+#endif
+
 // NOTE: This has to be the last file included! (turned off below, since this is included like a header)
 #include "tier0/memdbgon.h"
 
@@ -329,6 +335,10 @@ public:
 			
 	virtual double GetPrevGLSwapWindowTime() { return m_flPrevGLSwapWindowTime; }
 
+#if defined( ANDROID ) && defined( TOGLES )
+	virtual bool ShouldForceFlushStates() { return m_bMangoHudDrew; }
+#endif
+
 	// Called to create a game window that will be hidden, designed for
 	// getting an OpenGL context going so we can begin initializing things.
 	bool CreateHiddenGameWindow( const char *pTitle, int width, int height );
@@ -406,6 +416,10 @@ private:
 
 	bool m_bResetVsync;
 	int m_nFramesToSkip;
+
+#if defined( ANDROID ) && defined( TOGLES )
+	bool m_bMangoHudDrew;
+#endif
 
 	double m_flPrevGLSwapWindowTime;
 };
@@ -589,6 +603,10 @@ InitReturnVal_t CSDLMgr::Init()
 
 	m_nFramesToSkip = 0;
 	m_bResetVsync = false;
+
+#if defined( ANDROID ) && defined( TOGLES )
+	m_bMangoHudDrew = false;
+#endif
 
 	m_flPrevGLSwapWindowTime = 0.0f;
 
@@ -1183,11 +1201,57 @@ void CSDLMgr::OnFrameRendered()
 }
 
 #if defined( DX_TO_GL_ABSTRACTION )
+#if defined( ANDROID ) && defined( TOGLES )
+static int s_MangoHudState = -1; // -1 unknown, 0 disabled, 1 enabled
+
+static bool MangoHud_MaybeRender( SDL_Window *window )
+{
+	if ( s_MangoHudState < 0 )
+	{
+		s_MangoHudState = CommandLine()->FindParm( "-mangohud" ) ? 1 : 0;
+
+		if ( s_MangoHudState )
+		{
+			char cwd[PATH_MAX] = { 0 };
+			if ( !getcwd( cwd, sizeof( cwd ) ) )
+				cwd[0] = '\0';
+
+			MangoHudDesc desc;
+			memset( &desc, 0, sizeof( desc ) );
+			desc.api = MANGOHUD_API_GLES;
+			desc.get_proc_address = SDL_GL_GetProcAddress;
+			desc.config_dir = cwd;
+			desc.default_config =
+				"fps,frametime,cpu_stats,ram,position=top-left,"
+				"gpu_stats=0,vram=0,gpu_temp=0,gpu_power=0,gpu_clock=0,"
+				"gpu_voltage=0,gpu_fan=0";
+
+			if ( !MangoHud_Init( &desc ) )
+				s_MangoHudState = 0;
+		}
+	}
+
+	if ( !s_MangoHudState )
+		return false;
+
+	int width = 0, height = 0;
+	SDL_GL_GetDrawableSize( window, &width, &height );
+	if ( width <= 0 || height <= 0 )
+		return false;
+
+	return MangoHud_Render( width, height ) != 0;
+}
+#endif
+
 void CSDLMgr::ShowPixels( CShowPixelsParams *params )
 {
 	SDLAPP_FUNC;
 	
 	tmZone( TELEMETRY_LEVEL0, TMZF_NONE, __FUNCTION__ );
+
+#if defined( ANDROID ) && defined( TOGLES )
+	m_bMangoHudDrew = false;
+#endif
 
 	if (params->m_onlySyncView)
 		return;
@@ -1432,6 +1496,10 @@ void CSDLMgr::ShowPixels( CShowPixelsParams *params )
 
 	CFastTimer tm;
 	tm.Start();
+
+#if defined( ANDROID ) && defined( TOGLES )
+	m_bMangoHudDrew = MangoHud_MaybeRender( m_Window );
+#endif
 
 	SDL_GL_SwapWindow( m_Window );
 

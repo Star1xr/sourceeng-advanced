@@ -100,6 +100,10 @@ public:
 	virtual void SetGammaRamp( const uint16 *pRed, const uint16 *pGreen, const uint16 *pBlue ) = 0;
 
 	virtual double GetPrevGLSwapWindowTime() = 0;
+
+	// Returns true when an overlay (MangoHud) changed GL state during the
+	// most recent ShowPixels() and the ToGL state cache must be re-synced.
+	virtual bool ShouldForceFlushStates() { return false; }
 };
 
 extern ILauncherMgr *g_pLauncherMgr;

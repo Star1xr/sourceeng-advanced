@@ -2393,6 +2393,13 @@ void GLMContext::Present( CGLMTex *tex )
 			ShowPixels(&showparams);
 		}
 
+		// MangoHud renders with its own GL state. When it drew, invalidate the
+		// ToGL state cache so the engine re-sends everything on the next draw.
+		if ( g_pLauncherMgr->ShouldForceFlushStates() )
+		{
+			ForceFlushStates();
+		}
+
 		//	put the original FB back in place (both read and draw)
 		// this bind will hit both read and draw bindings
 		BindFBOToCtx( m_drawingFBO, GL_FRAMEBUFFER_EXT );
