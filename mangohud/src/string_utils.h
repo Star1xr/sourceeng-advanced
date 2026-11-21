@@ -11,6 +11,7 @@
 #include <cctype>
 #include <locale>
 #include <cstring>
+#include <stdexcept>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
