@@ -16,7 +16,7 @@
 #include "device.h"
 #include "cpu.h"
 #include "gpu.h"
-#include "memory.h"
+#include "memory_stats.h"
 #include "iostats.h"
 #include "mesa/util/macros.h"
 #include "string_utils.h"

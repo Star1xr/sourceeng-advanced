@@ -1,5 +1,5 @@
 #include <spdlog/spdlog.h>
-#include "memory.h"
+#include "memory_stats.h"
 #include <iomanip>
 #include <cstring>
 #include <stdio.h>

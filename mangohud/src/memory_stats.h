@@ -1,6 +1,6 @@
 #pragma once
-#ifndef MANGOHUD_MEMORY_H
-#define MANGOHUD_MEMORY_H
+#ifndef MANGOHUD_MEMORY_STATS_H
+#define MANGOHUD_MEMORY_STATS_H
 
 #include <stdio.h>
 #include <thread>
@@ -26,4 +26,4 @@ void update_meminfo(void);
 void update_procmem();
 FILE *open_file(const char *file, int *reported);
 
-#endif //MANGOHUD_MEMORY_H
+#endif //MANGOHUD_MEMORY_STATS_H

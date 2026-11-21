@@ -14,7 +14,7 @@
 #include "overlay.h"
 #include "cpu.h"
 #include "gpu.h"
-#include "memory.h"
+#include "memory_stats.h"
 #include "timing.hpp"
 #include "fcat.h"
 #include "mesa/util/macros.h"
