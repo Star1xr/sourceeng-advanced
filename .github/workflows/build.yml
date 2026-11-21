@@ -2,44 +2,79 @@ name: Build
 on: [push, pull_request]
 
 jobs:
-  build-android-armv7a:
+  build-android:
+    name: build-android-${{ matrix.arch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [armv7a, arm64]
+
+    env:
+      # waf (--use-ccache) puts the cache in <workspace>/.ccache/<cc>/<os>/<cpu>.
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "1"
+      CCACHE_MAXSIZE: 1500M
+      # The NDK is pinned (r10e), so key the compiler check on that instead of
+      # hashing the compiler binaries on every invocation. Change this string
+      # if the NDK version in the setup step below changes.
+      CCACHE_COMPILERCHECK: string:android-ndk-r10e
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Build android-armv7a
+      - name: Setup NDK and tools
         run: |
-          chmod +x scripts/build-android-armv7a.sh
-          ./scripts/build-android-armv7a.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ccache
+
+          if [ ! -d android-ndk-r10e ]; then
+            wget -q --tries=3 https://dl.google.com/android/repository/android-ndk-r10e-linux-x86_64.zip
+            unzip -q android-ndk-r10e-linux-x86_64.zip
+            rm -f android-ndk-r10e-linux-x86_64.zip
+          fi
+
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r10e/" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$PWD/android-ndk-r10e/" >> "$GITHUB_ENV"
+          ccache --version | head -n 1
+
+      # Restore the newest cache for this arch. Saving is done separately below
+      # with `if: always()` so a failed build still keeps what it compiled.
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.arch }}-
+
+      - name: Build android-${{ matrix.arch }}
+        run: |
+          chmod +x scripts/build-android-${{ matrix.arch }}.sh
+          ./scripts/build-android-${{ matrix.arch }}.sh
 
       - name: Show configure log on failure
         if: failure()
         run: tail -n 300 build/config.log || true
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-armv7a-bundle
-          path: build/**/*.so
-
-  build-android-arm64:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Build android-arm64
+      - name: ccache stats
+        if: always()
         run: |
-          chmod +x scripts/build-android-arm64.sh
-          ./scripts/build-android-arm64.sh
+          for d in $(find .ccache -mindepth 3 -maxdepth 3 -type d 2>/dev/null); do
+            echo "== $d"
+            CCACHE_DIR="$PWD/$d" ccache -s || true
+          done
 
-      - name: Show configure log on failure
-        if: failure()
-        run: tail -n 300 build/config.log || true
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.arch }}-${{ github.sha }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-arm64-bundle
+          name: android-${{ matrix.arch }}-bundle
           path: build/**/*.so
