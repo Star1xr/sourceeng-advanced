@@ -412,6 +412,13 @@ def check_deps(conf):
 		# discoverable before the individual library checks run; the -L flags
 		# added later in configure() only cover compilation and linking.
 		conf.env.append_unique('LIBPATH', [os.path.abspath('lib/android/' + conf.env.DEST_CPU)])
+		if conf.env.DEST_CPU == 'aarch64':
+			# The prebuilt aarch64 libSDL2.so was built with a newer NDK and
+			# references versioned libc symbols (e.g. fread@LIBC). NDK r10e's
+			# libc.so carries no symbol versions, so its linker rejects the
+			# library. Bionic ignores symbol versions at runtime, so let the
+			# linker skip the shared library's undefined symbols.
+			conf.env.append_unique('LINKFLAGS', ['-Wl,--allow-shlib-undefined'])
 		conf.check(lib='SDL2', uselib_store='SDL2')
 		conf.check(lib='freetype2', uselib_store='FT2')
 		conf.check(lib='jpeg', uselib_store='JPEG', define_name='HAVE_JPEG')
