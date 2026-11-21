@@ -233,7 +233,7 @@ bool CPUStats::UpdateCoreMhz() {
     static bool scaling_freq = true;
     if (scaling_freq){
         for (auto& cpu : m_cpuData){
-            std::string path = "/sys/devices/system/cpu/cpu" + std::to_string(cpu.cpu_id) + "/cpufreq/scaling_cur_freq";
+            std::string path = "/sys/devices/system/cpu/cpu" + mh::to_string(cpu.cpu_id) + "/cpufreq/scaling_cur_freq";
             if ((fp = fopen(path.c_str(), "r"))){
                 int64_t temp;
                 if (fscanf(fp, "%" PRId64, &temp) != 1)

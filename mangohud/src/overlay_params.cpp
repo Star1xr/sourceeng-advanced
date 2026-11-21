@@ -109,7 +109,7 @@ parse_control(const char *str)
    std::string path(str);
    size_t npos = path.find("%p");
    if (npos != std::string::npos)
-      path.replace(npos, 2, std::to_string(getpid()));
+      path.replace(npos, 2, mh::to_string(getpid()));
    SPDLOG_DEBUG("Socket: {}", path);
 
    int ret = os_socket_listen_abstract(path.c_str(), 1);
