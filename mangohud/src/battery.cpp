@@ -1,3 +1,4 @@
+#include "port/string_compat.h"
 #include <spdlog/spdlog.h>
 #include <filesystem.h>
 #include "battery.h"
@@ -53,11 +54,11 @@ float BatteryStats::getPercent()
             std::ifstream input(charge_now);
             std::string line;
             if(std::getline(input, line)) {
-                charge_n += (stof(line) / 1000000);
+                charge_n += (mh::stof(line) / 1000000);
             }
             std::ifstream input2(charge_full);
             if(std::getline(input2, line)) {
-                charge_f += (stof(line) / 1000000);
+                charge_f += (mh::stof(line) / 1000000);
             }
         }
 
@@ -65,11 +66,11 @@ float BatteryStats::getPercent()
             std::ifstream input(energy_now);
             std::string line;
             if(std::getline(input, line)) {
-                charge_n += (stof(line) / 1000000);
+                charge_n += (mh::stof(line) / 1000000);
             }
             std::ifstream input2(energy_full);
             if(std::getline(input2, line)) {
-                charge_f += (stof(line) / 1000000);
+                charge_f += (mh::stof(line) / 1000000);
             }
         }
 
@@ -79,7 +80,7 @@ float BatteryStats::getPercent()
             std::ifstream input(capacity);
             std::string line;
             if(std::getline(input, line)) {
-                charge_n += stof(line) / 100;
+                charge_n += mh::stof(line) / 100;
                 charge_f = batt_count;
             }
         }
@@ -112,18 +113,18 @@ float BatteryStats::getPower() {
             std::ifstream input(current_power);
             std::string line;
             if(std::getline(input,line)) {
-                current += (stof(line) / 1000000);
+                current += (mh::stof(line) / 1000000);
             }
             std::ifstream input2(current_voltage);
             if(std::getline(input2, line)) {
-                voltage += (stof(line) / 1000000);
+                voltage += (mh::stof(line) / 1000000);
             }
         }
         else {
             std::ifstream input(power_now);
             std::string line;
             if(std::getline(input,line)) {
-                current += (stof(line) / 1000000);
+                current += (mh::stof(line) / 1000000);
                 voltage = 1;
             }
         }
@@ -146,7 +147,7 @@ float BatteryStats::getTimeRemaining(){
             std::ifstream input(current_now);
             std::string line;
             if(std::getline(input, line)){
-                current_now_vec.push_back(stof(line));
+                current_now_vec.push_back(mh::stof(line));
             }
         } else if (fs::exists(power_now)){
             float voltage = 0;
@@ -155,10 +156,10 @@ float BatteryStats::getTimeRemaining(){
             std::ifstream input_voltage(voltage_now);
             std::string line;
             if(std::getline(input_voltage, line)){
-                voltage = stof(line);
+                voltage = mh::stof(line);
             }
             if(std::getline(input_power, line)){
-                power = stof(line);
+                power = mh::stof(line);
             }
             current_now_vec.push_back(power / voltage);
         }
@@ -166,7 +167,7 @@ float BatteryStats::getTimeRemaining(){
             std::string line;
             std::ifstream input(charge_now);
             if(std::getline(input, line)){
-                charge += stof(line);
+                charge += mh::stof(line);
             }
         }
         else if (fs::exists(energy_now)) {
@@ -176,10 +177,10 @@ float BatteryStats::getTimeRemaining(){
             std::ifstream input_energy(energy_now);
             std::ifstream input_voltage(voltage_now);
             if(std::getline(input_energy, line)){
-                energy = stof(line);
+                energy = mh::stof(line);
             }
             if(std::getline(input_voltage, line)){
-                voltage = stof(line);
+                voltage = mh::stof(line);
             }
             charge += energy / voltage;
         }

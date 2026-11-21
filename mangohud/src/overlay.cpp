@@ -1093,7 +1093,7 @@ void update_fan(){
    }
 
    if (!hwmon_path.empty())
-      fan_speed = stoi(read_line(hwmon_path));
+      fan_speed = mh::stoi(read_line(hwmon_path));
    else
       fan_speed = -1;
 }
