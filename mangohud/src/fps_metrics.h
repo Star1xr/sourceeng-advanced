@@ -1,4 +1,5 @@
 #pragma once
+#include "port/string_compat.h"
 #include <vector>
 #include <string>
 #include <memory>
@@ -58,7 +59,7 @@ class fpsMetrics {
                         }
                     } else {
                         try {
-                            float val = std::stof(it->name);
+                            float val = mh::stof(it->name);
                             if (val <= 0 || val >= 1 ) {
                                 SPDLOG_DEBUG("Failed to use fps metric, it's out of range {}", it->name);
                                 it = metrics.erase(it);

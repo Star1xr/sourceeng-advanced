@@ -106,11 +106,6 @@ def build(bld):
 
 	defines = [
 		'IMGUI_DEFINE_MATH_OPERATORS',
-		# NDK r10e's gnustl leaves _GLIBCXX_USE_C99 undefined in its
-		# c++config.h, which compiles std::stoi/stoll/to_string out of
-		# <string>. Bionic provides all the underlying C99 functions, so
-		# enable the helpers for this library only.
-		'_GLIBCXX_USE_C99=1',
 	]
 
 	# MangoHud v0.7.2 requires C++14. The engine configures the shared

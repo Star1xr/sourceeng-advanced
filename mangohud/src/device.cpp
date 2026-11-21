@@ -1,3 +1,4 @@
+#include "port/string_compat.h"
 #include "device.h"
 #include <filesystem.h>
 #include <iostream>
@@ -130,7 +131,7 @@ void device_info () {
                 if (xbox_count == 1 )
                     device_data[device_count].name = "XBOX PAD";
                 else
-                    device_data[device_count].name = "XBOX PAD-" + to_string(xbox_counter + 1);
+                    device_data[device_count].name = "XBOX PAD-" + mh::to_string(xbox_counter + 1);
                 xbox_counter++;
             }
             //DualShock 4 devices
@@ -138,7 +139,7 @@ void device_info () {
                 if (ds4_count == 1)
                     device_data[device_count].name = "DS4 PAD";
                 else
-                    device_data[device_count].name = "DS4 PAD-" + to_string(ds4_counter + 1);
+                    device_data[device_count].name = "DS4 PAD-" + mh::to_string(ds4_counter + 1);
                 ds4_counter++;
             }
             //DualSense 5 devices
@@ -147,7 +148,7 @@ void device_info () {
                 if (ds5_count == 1)
                     device_data[device_count].name = "DS4/5 PAD";
                 else
-                    device_data[device_count].name = "DS4/5 PAD-" + to_string(ds5_counter + 1);
+                    device_data[device_count].name = "DS4/5 PAD-" + mh::to_string(ds5_counter + 1);
                 ds5_counter++;
             }
             //Nintendo Switch devices
@@ -155,7 +156,7 @@ void device_info () {
                 if (switch_count == 1)
                     device_data[device_count].name = "SWITCH PAD";
                 else
-                    device_data[device_count].name = "SWITCH PAD-" + to_string(switch_counter + 1);
+                    device_data[device_count].name = "SWITCH PAD-" + mh::to_string(switch_counter + 1);
                 switch_counter++;
             }
             //8bitdo devices
@@ -163,7 +164,7 @@ void device_info () {
                 if (bitdo_count == 1)
                     device_data[device_count].name = "8BITDO PAD";
                 else
-                    device_data[device_count].name = "8BITDO PAD-" + to_string(bitdo_counter + 1);
+                    device_data[device_count].name = "8BITDO PAD-" + mh::to_string(bitdo_counter + 1);
                 bitdo_counter++;
             }
             //Shield devices
@@ -171,7 +172,7 @@ void device_info () {
                 if (shield_count == 1)
                     device_data[device_count].name = "SHIELD PAD";
                 else
-                    device_data[device_count].name = "SHIELD PAD-" + to_string(shield_counter + 1);
+                    device_data[device_count].name = "SHIELD PAD-" + mh::to_string(shield_counter + 1);
                 shield_counter++;
             }
         }
@@ -198,7 +199,7 @@ void device_info () {
             if (std::getline(input_capacity, line)) {
                 device_data[device_count].battery_percent = line;
                 device_data[device_count].report_percent = true;
-                switch(std::stoi(line)) {
+                switch(mh::stoi(line)) {
                     case 0 ... 25:
                         device_data[device_count].battery = "Low";
                         break;

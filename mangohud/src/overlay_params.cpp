@@ -1,3 +1,4 @@
+#include "port/string_compat.h"
 #include <cstdint>
 #ifdef _WIN32
 #include <windows.h>
@@ -187,7 +188,7 @@ parse_preset(const char *str)
 
     uint32_t as_int;
     try {
-      as_int = static_cast<int>(std::stoi(value));
+      as_int = static_cast<int>(mh::stoi(value));
     } catch (const std::invalid_argument&) {
       SPDLOG_ERROR("invalid preset value: '{}'", value);
       continue;
@@ -216,7 +217,7 @@ parse_fps_limit(const char *str)
 
       uint32_t as_int;
       try {
-         as_int = static_cast<uint32_t>(std::stoul(value));
+         as_int = static_cast<uint32_t>(mh::stoul(value));
       } catch (const std::invalid_argument&) {
          SPDLOG_ERROR("invalid fps_limit value: '{}'", value);
          continue;
@@ -258,10 +259,10 @@ parse_load_color(const char *str)
    std::string token;
    for (auto& token : tokens) {
       trim(token);
-      load_colors.push_back(std::stoi(token, NULL, 16));
+      load_colors.push_back(mh::stoi(token, NULL, 16));
    }
    while (load_colors.size() != 3) {
-      load_colors.push_back(std::stoi("FFFFFF" , NULL, 16));
+      load_colors.push_back(mh::stoi("FFFFFF" , NULL, 16));
    }
 
     return load_colors;
@@ -275,7 +276,7 @@ parse_load_value(const char *str)
    std::string token;
    for (auto& token : tokens) {
       trim(token);
-      load_value.push_back(std::stoi(token));
+      load_value.push_back(mh::stoi(token));
    }
     return load_value;
 }

@@ -1,3 +1,4 @@
+#include "port/string_compat.h"
 #include "net.h"
 #include "hud_elements.h"
 #include <string>
@@ -39,8 +40,8 @@ void Net::update() {
             uint64_t prevRx = iface.rxBytes;
             
             // current amount of bytes
-            iface.txBytes = std::stoll(read_line(txfile));
-            iface.rxBytes = std::stoll(read_line(rxfile));
+            iface.txBytes = mh::stoll(read_line(txfile));
+            iface.rxBytes = mh::stoll(read_line(rxfile));
 
             auto now = std::chrono::steady_clock::now();
             // calculate the bytes per second since last update

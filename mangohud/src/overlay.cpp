@@ -1,3 +1,4 @@
+#include "port/string_compat.h"
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -678,7 +679,7 @@ void render_imgui(swapchain_stats& data, struct overlay_params& params, ImVec2& 
    static float ralign_width = 0, old_scale = 0;
    auto io = ImGui::GetIO();
    if (params.enabled[OVERLAY_PARAM_ENABLED_fps_only]){
-      window_size = ImVec2((to_string(int(HUDElements.sw_stats->fps)).length() * ImGui::CalcTextSize("A").x) + 15.f, params.height);
+      window_size = ImVec2((mh::to_string(int(HUDElements.sw_stats->fps)).length() * ImGui::CalcTextSize("A").x) + 15.f, params.height);
    } else if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal]) {
       window_size = ImVec2(io.DisplaySize.x, params.height);
    } else {
