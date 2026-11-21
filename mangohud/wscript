@@ -1,0 +1,128 @@
+#! /usr/bin/env python
+# encoding: utf-8
+#
+# MangoHud v0.7.2, vendored for the Source Engine Android/ToGLES overlay.
+# Always built as a static library; there is deliberately no build option.
+
+import os
+
+top = '.'
+PROJECT_NAME = 'mangohud'
+
+
+def options(opt):
+	# stub
+	return
+
+
+def configure(conf):
+	# Nothing to detect. MangoHud uses its embedded fonts and the engine's
+	# SDL_GL_GetProcAddress for GL entry points.
+	return
+
+
+def build(bld):
+	src = [
+		'amdgpu.cpp',
+		'battery.cpp',
+		'blacklist.cpp',
+		'config.cpp',
+		'control.cpp',
+		'cpu.cpp',
+		'device.cpp',
+		'file_utils.cpp',
+		'font.cpp',
+		'font_unispace.c',
+		'gpu.cpp',
+		'hud_elements.cpp',
+		'intel.cpp',
+		'iostats.cpp',
+		'keybinds.cpp',
+		'logging.cpp',
+		'memory.cpp',
+		'msm.cpp',
+		'net.cpp',
+		'notify.cpp',
+		'overlay.cpp',
+		'overlay_params.cpp',
+		'pci_ids.cpp',
+		'shell.cpp',
+	]
+
+	gl_src = [
+		'gl_hud.cpp',
+		'gl_renderer.cpp',
+	]
+
+	c_src = [
+		'glad.c',
+	]
+
+	mesa_src = [
+		'util/os_socket.c',
+		'util/os_time.c',
+	]
+
+	imgui_src = [
+		'imgui.cpp',
+		'imgui_draw.cpp',
+		'imgui_tables.cpp',
+		'imgui_widgets.cpp',
+	]
+
+	implot_src = [
+		'implot.cpp',
+		'implot_items.cpp',
+	]
+
+	port_src = [
+		'port/ghc_fs_impl.cpp',
+		'port/mangohud_api.cpp',
+	]
+
+	source = (
+		[os.path.join('src', f) for f in src]
+		+ [os.path.join('src/gl', f) for f in gl_src]
+		+ [os.path.join('src/gl', f) for f in c_src]
+		+ [os.path.join('src/mesa', f) for f in mesa_src]
+		+ [os.path.join('vendor/imgui', f) for f in imgui_src]
+		+ [os.path.join('vendor/implot', f) for f in implot_src]
+		+ port_src
+	)
+
+	includes = [
+		'.',
+		'port',
+		'include',
+		'include/glad',
+		'src',
+		'src/gl',
+		'src/mesa',
+		'vendor/imgui',
+		'vendor/implot',
+		'vendor/spdlog',
+		'../public',
+	]
+
+	defines = [
+		'IMGUI_DEFINE_MATH_OPERATORS',
+	]
+
+	# MangoHud v0.7.2 requires C++14. The engine configures the shared
+	# environment for C++11, so derive a private environment for this library
+	# instead of changing flags for every other project.
+	env = bld.env.derive()
+	env.append_unique('CFLAGS', ['-std=gnu11'])
+	env.append_unique('CXXFLAGS', ['-std=c++14'])
+
+	bld.stlib(
+		source   = source,
+		target   = PROJECT_NAME,
+		name     = PROJECT_NAME,
+		features = 'c cxx',
+		includes = includes,
+		defines  = defines,
+		env      = env,
+		subsystem = bld.env.MSVC_SUBSYSTEM,
+		idx      = bld.get_taskgen_count()
+	)

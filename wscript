@@ -333,7 +333,11 @@ def check_deps(conf):
 	if conf.env.DEST_OS != 'win32':
 		conf.check_cc(lib='dl', mandatory=False)
 		conf.check_cc(lib='bz2', mandatory=True)
-		conf.check_cc(lib='rt', mandatory=False)
+		conf.check_cc(lib='atomic', mandatory=False)
+		if conf.env.DEST_OS == 'android' and not conf.env.LIB_ATOMIC:
+			conf.env.LIB_ATOMIC = ['atomic']
+		if conf.env.DEST_OS != 'android':
+			conf.check_cc(lib='rt', mandatory=False)
 
 		if not conf.env.LIB_M: # HACK: already added in xcompile!
 			conf.check_cc(lib='m')
@@ -404,6 +408,10 @@ def check_deps(conf):
 			if conf.options.OPUS:
 				conf.check_cfg(package='opus', uselib_store='OPUS', args=['--cflags', '--libs'])
 	else:
+		# The Android libraries live in the `lib` submodule. Make them
+		# discoverable before the individual library checks run; the -L flags
+		# added later in configure() only cover compilation and linking.
+		conf.env.append_unique('LIBPATH', [os.path.abspath('lib/android/' + conf.env.DEST_CPU)])
 		conf.check(lib='SDL2', uselib_store='SDL2')
 		conf.check(lib='freetype2', uselib_store='FT2')
 		conf.check(lib='jpeg', uselib_store='JPEG', define_name='HAVE_JPEG')
@@ -414,6 +422,9 @@ def check_deps(conf):
 			conf.check(lib='unwind', uselib_store='UNWIND')
 			conf.check(lib='crypto', uselib_store='CRYPTO')
 			conf.check(lib='ssl', uselib_store='SSL')
+		else:
+			# lib/android/aarch64 ships libunwind.a but not libcrypto/libssl.
+			conf.env.LIB_UNWIND = ['unwind']
 		conf.check(lib='android_support', uselib_store='ANDROID_SUPPORT')
 		conf.check(lib='opus', uselib_store='OPUS')
 
@@ -464,6 +475,10 @@ def configure(conf):
 	elif conf.env.GL:
 		projects['game'] += ['togl']
 
+	# MangoHud is part of the Android/ToGLES build unconditionally.
+	if conf.env.DEST_OS == 'android':
+		projects['game'] += ['mangohud']
+
 	if conf.env.DEST_OS == 'win32':
 		projects['game'] += ['utils/bzip2']
 		projects['dedicated'] += ['utils/bzip2']
@@ -512,10 +527,9 @@ def configure(conf):
 			'-I'+os.path.abspath('.')+'/thirdparty/SDL',
 			'-I'+os.path.abspath('.')+'/thirdparty/openal-soft/include/',
 			'-I'+os.path.abspath('.')+'/thirdparty/fontconfig',
-			'-I'+os.path.abspath('.')+'/thirdparty/freetype/include',
-			'-llog',
-			'-lz'
+			'-I'+os.path.abspath('.')+'/thirdparty/freetype/include'
 		]
+		conf.env.append_unique('LIB', ['log', 'z', 'atomic'])
 
 		flags += ['-funwind-tables', '-g']
 	elif conf.env.COMPILER_CC != 'msvc' and conf.env.DEST_OS != 'darwin' and conf.env.DEST_CPU in ['x86', 'x86_64']:
@@ -648,5 +662,8 @@ def build(bld):
 			projects['game'] += ['togles']
 		elif bld.env.GL:
 			projects['game'] += ['togl']
+
+		if bld.env.DEST_OS == 'android':
+			projects['game'] += ['mangohud']
 
 		bld.add_subproject(projects['game'])

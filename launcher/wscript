@@ -43,6 +43,9 @@ def build(bld):
 
 	libs = ['tier0','tier1','tier2','tier3','vstdlib','steam_api','appframework','SDL2','togl', 'UNWIND']
 
+	if bld.env.DEST_OS == 'android':
+		libs += ['mangohud']
+
 	if bld.env.DEST_OS == 'win32':
 		libs += ['USER32', 'OLE32', 'SHELL32']
 
