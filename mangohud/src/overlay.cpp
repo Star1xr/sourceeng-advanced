@@ -1,6 +1,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <string>
 #include <thread>
 #include <condition_variable>
 #include <spdlog/spdlog.h>

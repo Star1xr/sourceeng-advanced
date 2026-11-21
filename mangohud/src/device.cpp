@@ -2,6 +2,7 @@
 #include <filesystem.h>
 #include <iostream>
 #include <algorithm>
+#include <string>
 #include <spdlog/spdlog.h>
 
 namespace fs = ghc::filesystem;

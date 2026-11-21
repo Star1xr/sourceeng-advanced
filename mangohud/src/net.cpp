@@ -1,5 +1,6 @@
 #include "net.h"
 #include "hud_elements.h"
+#include <string>
 
 Net::Net() {
     should_reset = false;
