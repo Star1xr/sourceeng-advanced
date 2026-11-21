@@ -79,6 +79,10 @@ def build(bld):
 
 	defines.remove('PROTECTED_THINGS_ENABLE')
 
+	# GamepadUI (game/gamepadui) exists for HL2, Episodic (EP1/EP2) and Portal.
+	if bld.env.GAMES in ['hl2', 'episodic', 'portal']:
+		defines += ['GAMEPADUI']
+
 	bld.shlib(
 		source   = source,
 		target   = PROJECT_NAME,
