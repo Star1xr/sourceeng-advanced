@@ -1,3 +1,4 @@
+#include "port/time_compat.h"
 #include <sstream>
 #include <iomanip>
 #include <array>
@@ -220,7 +221,7 @@ static string get_log_suffix(){
   time_t now_log = time(0);
   tm *log_time = localtime(&now_log);
   std::ostringstream buffer;
-  buffer << std::put_time(log_time, "%Y-%m-%d_%H-%M-%S") << ".csv";
+  buffer << mh::put_time(log_time, "%Y-%m-%d_%H-%M-%S") << ".csv";
   string log_name = buffer.str();
   return log_name;
 }

@@ -1,4 +1,5 @@
 #include "port/string_compat.h"
+#include "port/time_compat.h"
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -280,7 +281,7 @@ void update_hud_info_with_frametime(struct swapchain_stats& sw_stats, const stru
       if (params.enabled[OVERLAY_PARAM_ENABLED_time]) {
          std::time_t t = std::time(nullptr);
          std::stringstream time;
-         time << std::put_time(std::localtime(&t), params.time_format.c_str());
+         time << mh::put_time(std::localtime(&t), params.time_format.c_str());
          sw_stats.time = time.str();
       }
 
