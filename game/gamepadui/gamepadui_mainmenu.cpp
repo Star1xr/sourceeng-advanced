@@ -48,10 +48,14 @@ void GamepadUIMainMenu::LoadMenuButtons()
     KeyValues* pDataFile = new KeyValues( "MainMenuScript" );
     if ( pDataFile )
     {
+        bool bHasConsoleButton = false;
         if ( pDataFile->LoadFromFile( g_pFullFileSystem, GAMEPADUI_MAINMENU_FILE ) )
         {
             for ( KeyValues* pData = pDataFile->GetFirstSubKey(); pData != NULL; pData = pData->GetNextKey() )
             {
+                if ( V_stristr( pData->GetString( "command" ), "toggleconsole" ) )
+                    bHasConsoleButton = true;
+
                 GamepadUIButton* pButton = new GamepadUIButton(
                     this, this,
                     GAMEPADUI_MAINMENU_SCHEME,
@@ -67,6 +71,22 @@ void GamepadUIMainMenu::LoadMenuButtons()
                 if ( !V_strcmp( pFamily, "mainmenu" ) || !V_strcmp( pFamily, "all" ) )
                     m_Buttons[ GamepadUIMenuStates::MainMenu ].AddToTail( pButton );
             }
+        }
+
+        // Touch devices have no ~ key, so always offer a console button
+        // unless mainmenu.res already defines one.
+        if ( !bHasConsoleButton )
+        {
+            GamepadUIButton* pButton = new GamepadUIButton(
+                this, this,
+                GAMEPADUI_MAINMENU_SCHEME,
+                "cmd toggleconsole",
+                "Console",
+                "Open the developer console" );
+            pButton->SetPriority( -1 );
+            pButton->SetVisible( true );
+            m_Buttons[ GamepadUIMenuStates::InGame ].AddToTail( pButton );
+            m_Buttons[ GamepadUIMenuStates::MainMenu ].AddToTail( pButton );
         }
 
         pDataFile->deleteThis();
