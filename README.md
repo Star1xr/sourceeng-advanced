@@ -3,8 +3,8 @@ Based on nillerusr's source engine base, built to bring Android a SteamOS level 
 Mostly vibecoded, though no trash code is making it into the repo since I actually know C++.
 
 ## Features 
-- GamepadUI (`-gamepadui`)
-- MangoHud (`-mangohud`)
+- GamepadUI (`-gamepadui`) for HL2, Portal
+- MangoHud (`-mangohud`) exact port with all features, customizable via `mangohud.conf` in your game directory (`srceng` or your custom game files path)
 
 ## Current tasks 
 - Graphics, Shaders & Lighting, UI, HUD & Gamepad Overhaul, Merged episodes backport/fix for 20th anniversary update
