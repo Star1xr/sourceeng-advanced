@@ -1026,7 +1026,7 @@ int CInputSystem::GetJoystickCount() const
 //-----------------------------------------------------------------------------
 static bool AndroidHasPhysicalKeyboard()
 {
-	enum { KEYBOARD_TYPE_ALPHABETIC = 2 };
+	enum { KEYBOARD_TYPE_ALPHABETIC = 2, SOURCE_KEYBOARD = 0x00000101 };
 
 	static bool s_bConnected = false;
 	static int s_nNextCheck = 0;
@@ -1060,6 +1060,7 @@ static bool AndroidHasPhysicalKeyboard()
 	jmethodID getInputDeviceIds = cInputManager ? env->GetMethodID( cInputManager, "getInputDeviceIds", "()[I" ) : NULL;
 	jmethodID getInputDevice = cInputManager ? env->GetMethodID( cInputManager, "getInputDevice", "(I)Landroid/view/InputDevice;" ) : NULL;
 	jmethodID getKeyboardType = cInputDevice ? env->GetMethodID( cInputDevice, "getKeyboardType", "()I" ) : NULL;
+	jmethodID getSources = cInputDevice ? env->GetMethodID( cInputDevice, "getSources", "()I" ) : NULL;
 
 	if ( env->ExceptionCheck() )
 	{
@@ -1086,6 +1087,13 @@ static bool AndroidHasPhysicalKeyboard()
 				{
 					for ( jsize i = 0; i < nCount && !s_bConnected; ++i )
 					{
+						// The system virtual keyboard is an InputDevice with a
+						// negative id (InputDevice.isVirtual() is just id < 0).
+						// It reports an alphabetic keyboard, so without this the
+						// console icon would always be treated as "keyboard present".
+						if ( pIds[ i ] < 0 )
+							continue;
+
 						jobject device = env->CallObjectMethod( inputManager, getInputDevice, pIds[ i ] );
 						if ( env->ExceptionCheck() )
 						{
@@ -1094,6 +1102,25 @@ static bool AndroidHasPhysicalKeyboard()
 						}
 						if ( device )
 						{
+							// Only count devices that actually expose a keyboard.
+							// This mirrors Android's hidden InputDevice.isFullKeyboard().
+							jint nSources = SOURCE_KEYBOARD;
+							if ( getSources )
+							{
+								nSources = env->CallIntMethod( device, getSources );
+								if ( env->ExceptionCheck() )
+								{
+									env->ExceptionClear();
+									nSources = 0;
+								}
+							}
+
+							if ( getSources && ( nSources & SOURCE_KEYBOARD ) != SOURCE_KEYBOARD )
+							{
+								env->DeleteLocalRef( device );
+								continue;
+							}
+
 							const jint nType = env->CallIntMethod( device, getKeyboardType );
 							if ( env->ExceptionCheck() )
 								env->ExceptionClear();
