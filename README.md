@@ -1,12 +1,12 @@
-# This Fork
-Built to bring Android a SteamOS level experience, both in gameplay feel and visual polish to the Source Engine base.
+# This Repo
+Based on nillerusr's source engine base, built to bring Android a SteamOS level experience, both in gameplay feel and visual polish to the Source Engine base.
 Mostly vibecoded, though no trash code is making it into the repo since I actually know C++.
 
-## Features
-- GamepadUI (-gamepdui)
-- Mangohud (-mangohud)
+## Features 
+- GamepadUI (`-gamepadui`)
+- MangoHud (`-mangohud`)
 
-## Current tasks in this fork
+## Current tasks 
 - Graphics, Shaders & Lighting, UI, HUD & Gamepad Overhaul, Merged episodes backport/fix for 20th anniversary update
 
 # Source Engine
