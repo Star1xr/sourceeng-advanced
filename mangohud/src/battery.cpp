@@ -8,15 +8,21 @@ using namespace std;
 
 void BatteryStats::numBattery() {
     int batteryCount = 0;
-    if (!fs::exists("/sys/class/power_supply/")) {
-         batteryCount = 0;
-    }
+    // Port: on Android 12 /sys/class/power_supply/ is not readable by apps
+    // (SELinux). The throwing directory_iterator ctor used to terminate the
+    // process, so use the error_code overloads and just report no battery.
+    std::error_code ec;
     fs::path path("/sys/class/power_supply/");
-    for (auto& p : fs::directory_iterator(path)) {
-        string fileName = p.path().filename();
-        if (fileName.find("BAT") != std::string::npos) {
-            battPath[batteryCount] = p.path();
-            batteryCount += 1;
+    if (fs::exists(path, ec) && !ec) {
+        fs::directory_iterator it(path, ec);
+        fs::directory_iterator end;
+        while (!ec && it != end) {
+            string fileName = it->path().filename();
+            if (fileName.find("BAT") != std::string::npos && batteryCount < 2) {
+                battPath[batteryCount] = it->path();
+                batteryCount += 1;
+            }
+            it.increment(ec);
         }
     }
     batt_count = batteryCount;
