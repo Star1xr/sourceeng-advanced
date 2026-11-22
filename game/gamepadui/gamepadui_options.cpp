@@ -72,6 +72,10 @@ public:
     void UpdateGradients() OVERRIDE;
 
     void LoadOptionTabs( const char* pszOptionsFile );
+    void LoadOptionTab( KeyValues* pTabData );
+    void LoadTabItems( KeyValues* pTabData, int nTab );
+    KeyValues* BuildTouchTabData();
+    void EnsureTouchTab();
 	
     void ApplySchemeSettings( vgui::IScheme *pScheme ) OVERRIDE;
 
@@ -111,6 +115,7 @@ private:
 
     GamepadUITab m_Tabs[ MAX_OPTIONS_TABS ];
     int m_nTabCount = 0;
+    int m_nTouchTab = -1;
 
     GamepadUIWheelyWheel* m_pResolutionButton = NULL;
 
@@ -353,6 +358,24 @@ protected:
     bool m_bInstantApply = false;
 };
 
+// The option buttons draw "< value >". This maps a local x coordinate to the
+// arrow that was pressed, so touch and mouse can change the value the same way
+// the gamepad does with left/right. nBlockRight is where the ">" ends.
+static int HitTestOptionArrows( vgui::HFont hFont, int nTextW, int nBlockRight, int x )
+{
+    const int nScroller = vgui::surface()->GetCharacterWidth( hFont, L'<' ) + vgui::surface()->GetCharacterWidth( hFont, L' ' );
+    const int nArrowRightX = nBlockRight - nScroller;
+    const int nTextLeft = nArrowRightX - nTextW;
+
+    if ( x >= nTextLeft - nScroller && x < nTextLeft )
+        return -1;
+
+    if ( x >= nArrowRightX && x < nBlockRight )
+        return 1;
+
+    return 0;
+}
+
 class GamepadUIWheelyWheel : public GamepadUIConvarButton
 {
 public:
@@ -366,6 +389,9 @@ public:
 
     void OnKeyCodePressed( vgui::KeyCode code )
     {
+        // A stale mouse arrow must not affect keyboard/gamepad input.
+        m_nMouseArrow = 0;
+
         ButtonCode_t buttonCode = GetBaseButtonCode( code );
         switch ( buttonCode )
         {
@@ -399,12 +425,46 @@ public:
         }
     }
 
+    void OnMousePressed( vgui::MouseCode code ) OVERRIDE
+    {
+        m_nMouseArrow = 0;
+
+        if ( code == MOUSE_LEFT && IsEnabled() && m_nSelectedItem < m_Options.Count() )
+        {
+            int x, y;
+            vgui::input()->GetCursorPos( x, y );
+            ScreenToLocal( x, y );
+
+            GamepadUIString& strOption = m_Options[ m_nSelectedItem ].strOptionText;
+            int nTextW, nTextH;
+            vgui::surface()->GetTextSize( m_hTextFont, strOption.String(), nTextW, nTextH );
+
+            m_nMouseArrow = HitTestOptionArrows( m_hTextFont, nTextW, m_flWidth - m_flTextOffsetX, x );
+        }
+
+        BaseClass::OnMousePressed( code );
+    }
+
     void FireActionSignal()
     {
+        const int nArrow = m_nMouseArrow;
+        m_nMouseArrow = 0;
+
         BaseClass::FireActionSignal();
 
-        if ( m_Options.Count() )
+        if ( !m_Options.Count() )
+            return;
+
+        if ( nArrow < 0 )
+        {
+            if ( --m_nSelectedItem < 0 )
+                m_nSelectedItem = Max( 0, m_Options.Count() - 1 );
+        }
+        else
+        {
             m_nSelectedItem = ( m_nSelectedItem + 1 ) % m_Options.Count();
+        }
+
         if ( m_bInstantApply )
             UpdateConVar();
     }
@@ -434,7 +494,6 @@ public:
             return;
 
         GamepadUIString& strOption = m_Options[ m_nSelectedItem ].strOptionText;
-        ButtonState state = GetCurrentButtonState();
 
         int nTextW, nTextH;
         vgui::surface()->GetTextSize( m_hTextFont, strOption.String(), nTextW, nTextH );
@@ -443,19 +502,18 @@ public:
 
         int nTextY = m_flHeight / 2 - nTextH / 2 + m_flTextOffsetY;
 
+        // Always draw the arrows: a touch screen has no hover state to reveal them.
         vgui::surface()->DrawSetTextFont( m_hTextFont );
-        if ( state != ButtonStates::Out )
-        {
-            vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nTextW - 2 * nScrollerSize, nTextY );
-            vgui::surface()->DrawPrintText( L"< ", 2 );
-        }
+        vgui::surface()->DrawSetTextColor( m_colTextColor );
+
+        vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nTextW - 2 * nScrollerSize, nTextY );
+        vgui::surface()->DrawPrintText( L"< ", 2 );
+
         vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nTextW - nScrollerSize, nTextY );
         vgui::surface()->DrawPrintText( strOption.String(), strOption.Length() );
-        if ( state != ButtonStates::Out )
-        {
-            vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nScrollerSize, nTextY );
-            vgui::surface()->DrawPrintText( L" >", 2 );
-        }
+
+        vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nScrollerSize, nTextY );
+        vgui::surface()->DrawPrintText( L" >", 2 );
     }
 
     void ClearOptions()
@@ -510,6 +568,7 @@ private:
 
     bool m_bSignOnly = false;
     int m_nSelectedItem = 0;
+    int m_nMouseArrow = 0;
     CUtlVector< GamepadUIOption > m_Options;
 
 };
@@ -530,6 +589,9 @@ public:
 
     void OnKeyCodePressed( vgui::KeyCode code )
     {
+        // A stale mouse arrow must not affect keyboard/gamepad input.
+        m_nMouseArrow = 0;
+
         ButtonCode_t buttonCode = GetBaseButtonCode( code );
         switch ( buttonCode )
         {
@@ -581,6 +643,8 @@ public:
     {
         BaseClass::Paint();
 
+        const int nBlockRight = m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth;
+
         if ( nTextPrecision >= 0 )
         {
             wchar_t szValue[ 256 ];
@@ -588,8 +652,23 @@ public:
 
             int w, h;
             vgui::surface()->GetTextSize( m_hTextFont, szValue, w, h );
-            vgui::surface()->DrawSetTextPos( m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth - w, m_flHeight / 2 - h / 2 );
+
+            const int nScrollerSize = vgui::surface()->GetCharacterWidth( m_hTextFont, L'<' ) + vgui::surface()->GetCharacterWidth( m_hTextFont, L' ' );
+            const int nTextX = nBlockRight - nScrollerSize - w;
+            const int nTextY = m_flHeight / 2 - h / 2;
+
+            // Always draw the arrows: a touch screen has no hover state to reveal them.
+            vgui::surface()->DrawSetTextFont( m_hTextFont );
+            vgui::surface()->DrawSetTextColor( m_colTextColor );
+
+            vgui::surface()->DrawSetTextPos( nTextX - nScrollerSize, nTextY );
+            vgui::surface()->DrawPrintText( L"< ", 2 );
+
+            vgui::surface()->DrawSetTextPos( nTextX, nTextY );
             vgui::surface()->DrawPrintText( szValue, V_wcslen( szValue ) );
+
+            vgui::surface()->DrawSetTextPos( nBlockRight - nScrollerSize, nTextY );
+            vgui::surface()->DrawPrintText( L" >", 2 );
         }
 
         vgui::surface()->DrawSetColor( m_colSliderBacking );
@@ -599,6 +678,44 @@ public:
 
         vgui::surface()->DrawSetColor( m_colSliderFill );
         vgui::surface()->DrawFilledRect( m_flWidth - m_flTextOffsetX - m_flSliderWidth, m_flHeight / 2 - m_flSliderHeight / 2, m_flWidth - m_flTextOffsetX - flFill, m_flHeight / 2 + m_flSliderHeight / 2 );
+    }
+
+    void OnMousePressed( vgui::MouseCode code ) OVERRIDE
+    {
+        m_nMouseArrow = 0;
+
+        if ( code == MOUSE_LEFT && IsEnabled() && nTextPrecision >= 0 )
+        {
+            int x, y;
+            vgui::input()->GetCursorPos( x, y );
+            ScreenToLocal( x, y );
+
+            wchar_t szValue[ 256 ];
+            V_snwprintf( szValue, sizeof( szValue ), L"%.*f", nTextPrecision, m_flValue );
+
+            int nTextW, nTextH;
+            vgui::surface()->GetTextSize( m_hTextFont, szValue, nTextW, nTextH );
+
+            const int nBlockRight = m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth;
+            m_nMouseArrow = HitTestOptionArrows( m_hTextFont, nTextW, nBlockRight, x );
+        }
+
+        BaseClass::OnMousePressed( code );
+    }
+
+    void FireActionSignal() OVERRIDE
+    {
+        const int nArrow = m_nMouseArrow;
+        m_nMouseArrow = 0;
+
+        BaseClass::FireActionSignal();
+
+        if ( nArrow == 0 )
+            return;
+
+        m_flValue = Clamp( m_flValue + ( nArrow > 0 ? m_flStep : -m_flStep ), m_flMin, m_flMax );
+        if ( m_bInstantApply )
+            UpdateConVar();
     }
 
     void SetToDefault() OVERRIDE
@@ -624,6 +741,7 @@ private:
     float m_flStep = 0.1f;
 
     int nTextPrecision = -1;
+    int m_nMouseArrow = 0;
 
     GAMEPADUI_BUTTON_ANIMATED_PROPERTY( Color, m_colSliderBacking, "Slider.Backing", "255 255 255 22", SchemeValueTypes::Color );
     GAMEPADUI_BUTTON_ANIMATED_PROPERTY( Color, m_colSliderFill, "Slider.Fill", "255 255 255 255", SchemeValueTypes::Color );
@@ -1433,17 +1551,8 @@ void GamepadUIOptionsPanel::OnCommand( char const* pCommand )
     }
     else if ( !V_strcmp( pCommand, "open_steaminput" ) )
     {
-#ifdef HL2_RETAIL // Steam input and Steam Controller are not supported in SDK2013 (Madi)
-        uint64_t nController = g_pInputSystem->GetActiveSteamInputHandle();
-        if ( !nController )
-        {
-            InputHandle_t nControllers[ STEAM_INPUT_MAX_COUNT ];
-            GamepadUI::GetInstance().GetSteamAPIContext()->SteamInput()->GetConnectedControllers( nControllers );
-            nController = nControllers[0];
-        }
-        if ( nController )
-            GamepadUI::GetInstance().GetSteamAPIContext()->SteamInput()->ShowBindingPanel( nController );
-#endif // HL2_RETAIL
+        if ( m_nTouchTab >= 0 && m_nTouchTab < m_nTabCount )
+            SetActiveTab( m_nTouchTab );
     }
     else if ( !V_strcmp( pCommand, "open_techcredits" ) )
     {
@@ -1813,275 +1922,411 @@ void GamepadUIOptionsPanel::SetActiveTab( int nTab )
     }
 }
 
+static void AddTouchHeader( KeyValues* pItems, const char* pszKey, const char* pszText )
+{
+    KeyValues* pItem = pItems->FindKey( pszKey, true );
+    pItem->SetString( "text", pszText );
+    pItem->SetString( "type", "headeryheader" );
+}
+
+static void AddTouchToggle( KeyValues* pItems, const char* pszKey, const char* pszText, const char* pszCvar )
+{
+    KeyValues* pItem = pItems->FindKey( pszKey, true );
+    pItem->SetString( "text", pszText );
+    pItem->SetString( "type", "wheelywheel" );
+    pItem->SetString( "convar", pszCvar );
+    pItem->SetBool( "instantapply", true );
+
+    KeyValues* pOptions = pItem->FindKey( "options", true );
+    pOptions->SetString( "0", "#gameui_disabled" );
+    pOptions->SetString( "1", "#gameui_enabled" );
+}
+
+static void AddTouchSlider( KeyValues* pItems, const char* pszKey, const char* pszText, const char* pszCvar, float flMin, float flMax, float flStep, int nTextPrecision, const char* pszDependsOn = NULL )
+{
+    KeyValues* pItem = pItems->FindKey( pszKey, true );
+    pItem->SetString( "text", pszText );
+    pItem->SetString( "type", "slideyslide" );
+    pItem->SetString( "convar", pszCvar );
+    pItem->SetFloat( "min", flMin );
+    pItem->SetFloat( "max", flMax );
+    pItem->SetFloat( "step", flStep );
+    pItem->SetInt( "textprecision", nTextPrecision );
+    pItem->SetBool( "instantapply", true );
+
+    if ( pszDependsOn && *pszDependsOn )
+        pItem->SetString( "depends_on", pszDependsOn );
+}
+
+void GamepadUIOptionsPanel::LoadTabItems( KeyValues* pTabData, int nTab )
+{
+    if ( !V_strcmp( pTabData->GetString( "items_from" ), "keyboard" ) )
+    {
+        char szBinding[256];
+        char szDescription[256];
+
+        // Load the default keys list
+        CUtlBuffer buf( 0, 0, CUtlBuffer::TEXT_BUFFER );
+        if ( !g_pFullFileSystem->ReadFile( "scripts/kb_act.lst", NULL, buf ) )
+            return;
+
+        const char *data = ( const char* )buf.Base();
+
+        char token[512];
+        while ( 1 )
+        {
+            data = UTIL_Parse( data, token, sizeof( token ) );
+            // Done.
+            if ( strlen( token ) <= 0 )
+                break;
+
+            Q_strncpy( szBinding, token, sizeof( szBinding ) );
+
+            data = UTIL_Parse( data, token, sizeof( token ) );
+            if ( strlen( token ) <= 0 )
+            {
+                break;
+            }
+
+            Q_strncpy( szDescription, token, sizeof( szDescription ) );
+
+            // Skip '======' rows
+            if ( szDescription[ 0 ] != '=' )
+            {
+                // Flag as special header row if binding is "blank"
+                if ( !stricmp( szBinding, "blank" ) )
+                {
+                    // add header item
+                    auto button = new GamepadUIButton(
+                        this, this,
+                        GAMEPADUI_RESOURCE_FOLDER "schemeoptions_sectiontitle.res",
+                        "button_pressed",
+                        szDescription, "" );
+                    //button->SetFooterButton( true );
+                    button->SetEnabled( false );
+                    m_Tabs[ nTab ].pButtons.AddToTail( button );
+                }
+                else
+                {
+                    // Add to list
+                    auto button = new GamepadUIKeyButton(
+                        szBinding, this, this,
+                        GAMEPADUI_RESOURCE_FOLDER "schemeoptions_wheelywheel.res",
+                        "button_pressed",
+                        szDescription, "" );
+                    m_Tabs[ nTab ].pButtons.AddToTail( button );
+                }
+            }
+        }
+
+        FillInBindings();
+    }
+
+    KeyValues* pTabItems = pTabData->FindKey( "items" );
+    if ( pTabItems )
+    {
+        for ( KeyValues* pItemData = pTabItems->GetFirstSubKey(); pItemData != NULL; pItemData = pItemData->GetNextKey() )
+        {
+            const char *pItemType = pItemData->GetString( "type", "droppydown" );
+            if ( !V_strcmp( pItemType, "checkybox" ) )
+            {
+                auto button = new GamepadUICheckButton(
+                    this, this,
+                    GAMEPADUI_RESOURCE_FOLDER "schemeoptions_checkybox.res",
+                    "button_pressed",
+                    pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
+                m_Tabs[ nTab ].pButtons.AddToTail( button );
+            }
+            else if ( !V_strcmp( pItemType, "skillyskill" ) )
+            {
+                auto button = new GamepadUISkillySkill(
+                    this, this,
+                    GAMEPADUI_RESOURCE_FOLDER "schemeoptions_skillyskill.res",
+                    "button_pressed",
+                    pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ),
+                    pItemData->GetString( "image", "" ), V_atoi( pItemData->GetString( "skill", "" ) ) );
+                button->SetMouseNavigate( false );
+                m_Tabs[ nTab ].pButtons.AddToTail( button );
+            }
+            else if ( !V_strcmp( pItemType, "slideyslide" ) )
+            {
+                const char *pszCvar = pItemData->GetString( "convar" );
+                const char *pszCvarDepends = pItemData->GetString( "depends_on" );
+                bool bInstantApply = pItemData->GetBool( "instantapply" );
+                float flMin = pItemData->GetFloat( "min", 0.0f );
+                float flMax = pItemData->GetFloat( "max", 1.0f );
+                float flStep = pItemData->GetFloat( "step", 0.1f );
+                int nTextPrecision = pItemData->GetInt( "textprecision", -1 );
+                auto button = new GamepadUISlideySlide(
+                    pszCvar, pszCvarDepends, bInstantApply, flMin, flMax, flStep, nTextPrecision,
+                    this, this,
+                    GAMEPADUI_RESOURCE_FOLDER "schemeoptions_slideyslide.res",
+                    "button_pressed",
+                    pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
+                button->SetToDefault();
+                m_Tabs[ nTab ].pButtons.AddToTail( button );
+            }
+            else if ( !V_strcmp( pItemType, "headeryheader" ) )
+            {
+                // add header item
+                auto button = new GamepadUIButton(
+                    this, this,
+                    GAMEPADUI_RESOURCE_FOLDER "schemeoptions_sectiontitle.res",
+                    "button_pressed",
+                    pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
+                //button->SetFooterButton( true );
+                button->SetEnabled( false );
+                m_Tabs[ nTab ].pButtons.AddToTail( button );
+            }
+            else if ( !V_strcmp( pItemType, "wheelywheel" ) )
+            {
+                const char *pszCvar = pItemData->GetString( "convar" );
+                const char *pszCvarDepends = pItemData->GetString( "depends_on" );
+                bool bInstantApply = pItemData->GetBool( "instantapply" );
+                bool bSignOnly = pItemData->GetBool( "signonly" );
+                auto button = new GamepadUIWheelyWheel(
+                    pszCvar, pszCvarDepends, bInstantApply, bSignOnly,
+                    this, this,
+                    GAMEPADUI_RESOURCE_FOLDER "schemeoptions_wheelywheel.res",
+                    "button_pressed",
+                    pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
+
+                const char *pszOptionsFrom = pItemData->GetString( "options_from" );
+                KeyValues *pOptions = pItemData->FindKey( "options" );
+                if ( pOptions )
+                {
+                    for ( KeyValues* pOptionData = pOptions->GetFirstSubKey(); pOptionData != NULL; pOptionData = pOptionData->GetNextKey() )
+                    {
+                        GamepadUIOption option;
+                        option.nValue = V_atoi( pOptionData->GetName() );
+                        option.strOptionText = GamepadUIString( pOptionData->GetString() );
+                        button->AddOptionItem( option );
+                    }
+                }
+                else if ( pszOptionsFrom && *pszOptionsFrom )
+                {
+                    if ( !V_strcmp( pszOptionsFrom, "antialiasing" ) )
+                    {
+                        for ( int i = 0; i < g_nNumAAModes; i++ )
+                        {
+                            GamepadUIOption option;
+                            option.nValue = i;
+                            option.strOptionText = g_AAModes[ i ].strName;
+                            button->AddOptionItem( option );
+                        }
+                    }
+                    else if ( !V_strcmp( pszOptionsFrom, "displaymode" ) )
+                    {
+                        int i = 0;
+
+                        GamepadUIOption option;
+                        option.nValue = i++;
+                        option.strOptionText = "#GameUI_Windowed";
+                        button->AddOptionItem( option );
+
+#ifdef HL2_RETAIL // SDK2013 does not support borderless windowed (Madi)
+                        wchar_t wszNoBorderText[ 256 ];
+                        V_swprintf_safe( wszNoBorderText, L"%ls (No Border)", option.strOptionText.String() );
+                        option.nValue = i++;
+                        option.strOptionText = wszNoBorderText;
+                        button->AddOptionItem( option );
+#endif // HL2_RETAIL
+
+#if defined( USE_SDL ) && defined( DX_TO_GL_ABSTRACTION )
+                        GamepadUIString strFullscreen = "#GameUI_Fullscreen";
+                        int numVideoDisplays = SDL_GetNumVideoDisplays();
+
+                        if ( numVideoDisplays <= 1 )
+                        {
+                            option.nValue = i++;
+                            option.strOptionText = strFullscreen;
+                            button->AddOptionItem( option );
+                        }
+                        else
+                        {
+                            for ( int display = 0; display < numVideoDisplays; display++ )
+                            {
+                                wchar_t wszItemText[ 256 ];
+                                V_swprintf_safe( wszItemText, L"%ls (%d)", strFullscreen.String(), display);
+
+                                option.nValue = i++;
+                                option.strOptionText = wszItemText;
+                                button->AddOptionItem( option );
+                            }
+
+                        }
+#else
+                        option.nValue = i++;
+                        option.strOptionText = "#GameUI_Fullscreen";
+                        button->AddOptionItem( option );
+#endif
+                    }
+                    else if ( !V_strcmp( pszOptionsFrom, "resolutions" ) )
+                    {
+                        m_pResolutionButton = button;
+
+                        UpdateResolutions();
+                    }
+                }
+                button->SetToDefault();
+
+                m_Tabs[ nTab ].pButtons.AddToTail( button );
+            }
+            else if ( !V_strcmp( pItemType, "button" ) )
+            {
+                auto button = new GamepadUIButton(
+                    this, this,
+                    GAMEPADUI_RESOURCE_FOLDER "schemeoptions_wheelywheel.res",
+                    pItemData->GetString( "command", "button_pressed" ),
+                    pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
+                m_Tabs[ nTab ].pButtons.AddToTail( button );
+            }
+        }
+    }
+
+    CUtlVector< GamepadUIButton* >& pButtons = m_Tabs[ nTab ].pButtons;
+    for ( int i = 1; i < pButtons.Count(); i++ )
+    {
+        if ( m_Tabs[ nTab ].bHorizontal )
+        {
+            pButtons[ i ]->SetNavLeft( pButtons[ i - 1 ] );
+            pButtons[ i - 1 ]->SetNavRight( pButtons[ i ] );
+        }
+        else
+        {
+            pButtons[ i ]->SetNavUp( pButtons[ i - 1 ] );
+            pButtons[ i - 1 ]->SetNavDown( pButtons[ i ] );
+        }
+    }
+}
+
+void GamepadUIOptionsPanel::LoadOptionTab( KeyValues* pTabData )
+{
+    if ( m_nTabCount >= MAX_OPTIONS_TABS )
+        return;
+
+    const int nTab = m_nTabCount;
+
+    char buttonCmd[64];
+    V_snprintf( buttonCmd, sizeof( buttonCmd ), "tab %d", nTab );
+
+    auto button = new GamepadUIButton(
+        this, this,
+        GAMEPADUI_RESOURCE_FOLDER "schemetab.res",
+        buttonCmd,
+        pTabData->GetString( "title" ), "" );
+    button->SetZPos( 50 );
+    //button->SetFooterButton( true );
+    if ( nTab == gamepadui_last_options_tab.GetInt() )
+        button->ForceDepressed( true );
+    m_Tabs[ nTab ].pTabButton = button;
+
+    m_Tabs[ nTab ].pTabButton->SetName( pTabData->GetName() );
+    m_Tabs[ nTab ].bAlternating = pTabData->GetBool( "alternating" );
+    m_Tabs[ nTab ].bHorizontal = pTabData->GetBool( "horizontal" );
+
+    // The old Steam Input tab only contains a button that opens the Steam
+    // binding panel. That code is compiled out in this tree (HL2_RETAIL is
+    // not defined), so the tab is turned into the Touch tab below.
+    KeyValues* pTabItems = pTabData->FindKey( "items" );
+    if ( pTabItems )
+    {
+        for ( KeyValues* pItemData = pTabItems->GetFirstSubKey(); pItemData != NULL; pItemData = pItemData->GetNextKey() )
+        {
+            if ( !V_strcmp( pItemData->GetString( "command", "" ), "open_steaminput" ) )
+            {
+                m_nTouchTab = nTab;
+                break;
+            }
+        }
+    }
+
+    // Also catch resources that already call the tab Touch (or Steam Input).
+    const char *pszTabName = pTabData->GetName();
+    const char *pszTabTitle = pTabData->GetString( "title", "" );
+    if ( m_nTouchTab < 0 &&
+         ( V_stristr( pszTabName, "steam" ) || V_stristr( pszTabName, "touch" ) ||
+           V_stristr( pszTabTitle, "steam" ) || V_stristr( pszTabTitle, "touch" ) ) )
+    {
+        m_nTouchTab = nTab;
+    }
+
+    LoadTabItems( pTabData, nTab );
+
+    m_nTabCount++;
+}
+
+KeyValues* GamepadUIOptionsPanel::BuildTouchTabData()
+{
+    KeyValues* pTab = new KeyValues( "Touch" );
+    pTab->SetString( "title", "Touch" );
+    pTab->SetBool( "alternating", false );
+    pTab->SetBool( "horizontal", false );
+
+    KeyValues* pItems = pTab->FindKey( "items", true );
+
+    AddTouchHeader( pItems, "TouchControlsHeader", "Touch controls" );
+    AddTouchToggle( pItems, "TouchEnable", "Enable touch", "touch_enable" );
+    AddTouchToggle( pItems, "TouchDraw", "Draw touch controls", "touch_draw" );
+    AddTouchToggle( pItems, "TouchFilter", "Touch filter", "touch_filter" );
+    AddTouchToggle( pItems, "TouchReverse", "Reverse touch", "touch_reverse" );
+
+    AddTouchHeader( pItems, "TouchLookHeader", "Touch look" );
+    AddTouchToggle( pItems, "TouchAcceleration", "Touch acceleration", "touch_enable_accel" );
+    AddTouchSlider( pItems, "TouchAccelExponent", "Acceleration exponent", "touch_accel", 1.0f, 1.5f, 0.05f, 2, "touch_enable_accel" );
+    AddTouchSlider( pItems, "TouchSensitivity", "Touch sensitivity", "touch_sensitivity", 0.1f, 6.0f, 0.1f, 2 );
+    AddTouchSlider( pItems, "TouchYaw", "Touch yaw sensitivity", "touch_yaw", 50.0f, 300.0f, 5.0f, 0 );
+    AddTouchSlider( pItems, "TouchPitch", "Touch pitch sensitivity", "touch_pitch", 50.0f, 300.0f, 5.0f, 0 );
+
+    return pTab;
+}
+
+void GamepadUIOptionsPanel::EnsureTouchTab()
+{
+    KeyValues* pTouchData = BuildTouchTabData();
+
+    if ( m_nTouchTab >= 0 && m_nTouchTab < m_nTabCount )
+    {
+        GamepadUITab& tab = m_Tabs[ m_nTouchTab ];
+
+        for ( GamepadUIButton* pButton : tab.pButtons )
+        {
+            pButton->SetVisible( false );
+            pButton->SetEnabled( false );
+            pButton->MarkForDeletion();
+        }
+        tab.pButtons.RemoveAll();
+        tab.KeysToUnbind.RemoveAll();
+        tab.ScrollState = GamepadUIScrollState();
+
+        tab.pTabButton->GetButtonText() = GamepadUIString( "Touch" );
+        tab.pTabButton->SetName( "Touch" );
+        tab.bAlternating = pTouchData->GetBool( "alternating" );
+        tab.bHorizontal = pTouchData->GetBool( "horizontal" );
+
+        LoadTabItems( pTouchData, m_nTouchTab );
+    }
+    else if ( m_nTabCount < MAX_OPTIONS_TABS )
+    {
+        LoadOptionTab( pTouchData );
+        m_nTouchTab = m_nTabCount - 1;
+    }
+
+    pTouchData->deleteThis();
+}
+
 void GamepadUIOptionsPanel::LoadOptionTabs( const char *pszOptionsFile )
 {
     KeyValues* pDataFile = new KeyValues( "Options" );
     if ( pDataFile->LoadFromFile( g_pFullFileSystem, pszOptionsFile ) )
     {
         for ( KeyValues* pTabData = pDataFile->GetFirstSubKey(); pTabData != NULL; pTabData = pTabData->GetNextKey() )
-        {
-            {
-                char buttonCmd[64];
-                V_snprintf( buttonCmd, sizeof( buttonCmd ), "tab %d", m_nTabCount );
-
-                auto button = new GamepadUIButton(
-                    this, this,
-                    GAMEPADUI_RESOURCE_FOLDER "schemetab.res",
-                    buttonCmd,
-                    pTabData->GetString( "title" ), "" );
-                button->SetZPos( 50 );
-                //button->SetFooterButton( true );
-                if ( m_nTabCount == gamepadui_last_options_tab.GetInt() )
-                    button->ForceDepressed( true );
-                m_Tabs[ m_nTabCount ].pTabButton = button;
-            }
-
-            m_Tabs[ m_nTabCount ].pTabButton->SetName( pTabData->GetName() );
-            m_Tabs[ m_nTabCount ].bAlternating = pTabData->GetBool( "alternating" );
-            m_Tabs[ m_nTabCount ].bHorizontal = pTabData->GetBool( "horizontal" );
-
-            if ( !V_strcmp( pTabData->GetString( "items_from" ), "keyboard" ) )
-            {
-	            char szBinding[256];
-	            char szDescription[256];
-
-	            // Load the default keys list
-	            CUtlBuffer buf( 0, 0, CUtlBuffer::TEXT_BUFFER );
-	            if ( !g_pFullFileSystem->ReadFile( "scripts/kb_act.lst", NULL, buf ) )
-		            return;
-
-	            const char *data = ( const char* )buf.Base();
-
-	            char token[512];
-	            while ( 1 )
-	            {
-		            data = UTIL_Parse( data, token, sizeof( token ) );
-		            // Done.
-		            if ( strlen( token ) <= 0 )
-			            break;
-
-		            Q_strncpy( szBinding, token, sizeof( szBinding ) );
-
-		            data = UTIL_Parse( data, token, sizeof( token ) );
-		            if ( strlen( token ) <= 0 )
-		            {
-			            break;
-		            }
-
-		            Q_strncpy( szDescription, token, sizeof( szDescription ) );
-
-		            // Skip '======' rows
-		            if ( szDescription[ 0 ] != '=' )
-		            {
-			            // Flag as special header row if binding is "blank"
-			            if ( !stricmp( szBinding, "blank" ) )
-			            {
-				            // add header item
-                            auto button = new GamepadUIButton(
-                                this, this,
-                                GAMEPADUI_RESOURCE_FOLDER "schemeoptions_sectiontitle.res",
-                                "button_pressed",
-                                szDescription, "" );
-                            //button->SetFooterButton( true );
-                            button->SetEnabled( false );
-                            m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-			            }
-			            else
-			            {
-				            // Add to list
-                            auto button = new GamepadUIKeyButton(
-                                szBinding, this, this,
-                                GAMEPADUI_RESOURCE_FOLDER "schemeoptions_wheelywheel.res",
-                                "button_pressed",
-                                szDescription, "" );
-                            m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-			            }
-		            }
-	            }
-
-                FillInBindings();
-            }
-
-            KeyValues* pTabItems = pTabData->FindKey( "items" );
-            if ( pTabItems )
-            {
-                for ( KeyValues* pItemData = pTabItems->GetFirstSubKey(); pItemData != NULL; pItemData = pItemData->GetNextKey() )
-                {
-                    const char *pItemType = pItemData->GetString( "type", "droppydown" );
-                    if ( !V_strcmp( pItemType, "checkybox" ) )
-                    {
-                        auto button = new GamepadUICheckButton(
-                            this, this,
-                            GAMEPADUI_RESOURCE_FOLDER "schemeoptions_checkybox.res",
-                            "button_pressed",
-                            pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
-                        m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-                    }
-                    else if ( !V_strcmp( pItemType, "skillyskill" ) )
-                    {
-                        auto button = new GamepadUISkillySkill(
-                            this, this,
-                            GAMEPADUI_RESOURCE_FOLDER "schemeoptions_skillyskill.res",
-                            "button_pressed",
-                            pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ),
-                            pItemData->GetString( "image", "" ), V_atoi( pItemData->GetString( "skill", "" ) ) );
-                        button->SetMouseNavigate( false );
-                        m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-                    }
-                    else if ( !V_strcmp( pItemType, "slideyslide" ) )
-                    {
-                        const char *pszCvar = pItemData->GetString( "convar" );
-                        const char *pszCvarDepends = pItemData->GetString( "depends_on" );
-                        bool bInstantApply = pItemData->GetBool( "instantapply" );
-                        float flMin = pItemData->GetFloat( "min", 0.0f );
-                        float flMax = pItemData->GetFloat( "max", 1.0f );
-                        float flStep = pItemData->GetFloat( "step", 0.1f );
-                        int nTextPrecision = pItemData->GetInt( "textprecision", -1 );
-                        auto button = new GamepadUISlideySlide(
-                            pszCvar, pszCvarDepends, bInstantApply, flMin, flMax, flStep, nTextPrecision,
-                            this, this,
-                            GAMEPADUI_RESOURCE_FOLDER "schemeoptions_slideyslide.res",
-                            "button_pressed",
-                            pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
-                        button->SetToDefault();
-                        m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-                    }
-                    else if ( !V_strcmp( pItemType, "headeryheader" ) )
-                    {
-				        // add header item
-                        auto button = new GamepadUIButton(
-                            this, this,
-                            GAMEPADUI_RESOURCE_FOLDER "schemeoptions_sectiontitle.res",
-                            "button_pressed",
-                            pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
-                        //button->SetFooterButton( true );
-                        button->SetEnabled( false );
-                        m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-                    }
-                    else if ( !V_strcmp( pItemType, "wheelywheel" ) )
-                    {
-                        const char *pszCvar = pItemData->GetString( "convar" );
-                        const char *pszCvarDepends = pItemData->GetString( "depends_on" );
-                        bool bInstantApply = pItemData->GetBool( "instantapply" );
-                        bool bSignOnly = pItemData->GetBool( "signonly" );
-                        auto button = new GamepadUIWheelyWheel(
-                            pszCvar, pszCvarDepends, bInstantApply, bSignOnly,
-                            this, this,
-                            GAMEPADUI_RESOURCE_FOLDER "schemeoptions_wheelywheel.res",
-                            "button_pressed",
-                            pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
-
-                        const char *pszOptionsFrom = pItemData->GetString( "options_from" );
-                        KeyValues *pOptions = pItemData->FindKey( "options" );
-                        if ( pOptions )
-                        {
-                            for ( KeyValues* pOptionData = pOptions->GetFirstSubKey(); pOptionData != NULL; pOptionData = pOptionData->GetNextKey() )
-                            {
-                                GamepadUIOption option;
-                                option.nValue = V_atoi( pOptionData->GetName() );
-                                option.strOptionText = GamepadUIString( pOptionData->GetString() );
-                                button->AddOptionItem( option );
-                            }
-                        }
-                        else if ( pszOptionsFrom && *pszOptionsFrom )
-                        {
-                            if ( !V_strcmp( pszOptionsFrom, "antialiasing" ) )
-                            {
-                                for ( int i = 0; i < g_nNumAAModes; i++ )
-                                {
-                                    GamepadUIOption option;
-                                    option.nValue = i;
-                                    option.strOptionText = g_AAModes[ i ].strName;
-                                    button->AddOptionItem( option );
-                                }
-                            }
-                            else if ( !V_strcmp( pszOptionsFrom, "displaymode" ) )
-                            {
-                                int i = 0;
-
-                                GamepadUIOption option;
-                                option.nValue = i++;
-                                option.strOptionText = "#GameUI_Windowed";
-                                button->AddOptionItem( option );
-
-#ifdef HL2_RETAIL // SDK2013 does not support borderless windowed (Madi)
-	                            wchar_t wszNoBorderText[ 256 ];
-	                            V_swprintf_safe( wszNoBorderText, L"%ls (No Border)", option.strOptionText.String() );
-                                option.nValue = i++;
-                                option.strOptionText = wszNoBorderText;
-                                button->AddOptionItem( option );
-#endif // HL2_RETAIL
-
-#if defined( USE_SDL ) && defined( DX_TO_GL_ABSTRACTION )
-                                GamepadUIString strFullscreen = "#GameUI_Fullscreen";
-	                            int numVideoDisplays = SDL_GetNumVideoDisplays();
-
-	                            if ( numVideoDisplays <= 1 )
-	                            {
-                                    option.nValue = i++;
-                                    option.strOptionText = strFullscreen;
-                                    button->AddOptionItem( option );
-	                            }
-	                            else
-	                            {
-		                            for ( int display = 0; display < numVideoDisplays; display++ )
-		                            {
-			                            wchar_t wszItemText[ 256 ];
-			                            V_swprintf_safe( wszItemText, L"%ls (%d)", strFullscreen.String(), display);
-
-                                        option.nValue = i++;
-                                        option.strOptionText = wszItemText;
-                                        button->AddOptionItem( option );
-		                            }
-
-	                            }
-#else
-                                option.nValue = i++;
-                                option.strOptionText = "#GameUI_Fullscreen";
-                                button->AddOptionItem( option );
-#endif
-                            }
-                            else if ( !V_strcmp( pszOptionsFrom, "resolutions" ) )
-                            {
-                                m_pResolutionButton = button;
-
-                                UpdateResolutions();
-                            }
-                        }
-                        button->SetToDefault();
-
-                        m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-                    }
-                    else if ( !V_strcmp( pItemType, "button" ) )
-                    {
-                        auto button = new GamepadUIButton(
-                            this, this,
-                            GAMEPADUI_RESOURCE_FOLDER "schemeoptions_wheelywheel.res",
-                            pItemData->GetString( "command", "button_pressed" ),
-                            pItemData->GetString( "text", "" ), pItemData->GetString( "description", "" ) );
-                        m_Tabs[ m_nTabCount ].pButtons.AddToTail( button );
-                    }
-                }
-            }
-
-            CUtlVector< GamepadUIButton* >& pButtons = m_Tabs[ m_nTabCount ].pButtons;
-            for ( int i = 1; i < pButtons.Count(); i++ )
-            {
-                if ( m_Tabs[ m_nTabCount ].bHorizontal )
-                {
-                    pButtons[ i ]->SetNavLeft( pButtons[ i - 1 ] );
-                    pButtons[ i - 1 ]->SetNavRight( pButtons[ i ] );
-                }
-                else
-                {
-                    pButtons[ i ]->SetNavUp( pButtons[ i - 1 ] );
-                    pButtons[ i - 1 ]->SetNavDown( pButtons[ i ] );
-                }
-            }
-
-            m_nTabCount++;
-        }
+            LoadOptionTab( pTabData );
     }
+
+    pDataFile->deleteThis();
+
+    EnsureTouchTab();
 }
 
 void GamepadUIOptionsPanel::ApplySchemeSettings( vgui::IScheme* pScheme )
