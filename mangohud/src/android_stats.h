@@ -10,6 +10,8 @@ struct AndroidStats {
     float battery_volt = 0.f;     // V
     bool charging = false;        // charging or full
     float gpu_temp = 0.f;         // estimated, degrees C
+    float watt = 0.f;             // |V * I|, 0 if the device reports no current
+    float remaining_hours = 0.f;  // to empty (discharging) or to full (charging), 0 if unknown
 };
 
 void AndroidStats_SetCallback(MangoHudAndroidStatsFn fn);

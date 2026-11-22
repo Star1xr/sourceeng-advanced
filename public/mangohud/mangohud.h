@@ -24,6 +24,11 @@ typedef struct MangoHudAndroidRaw
 	int temperature;  /* tenths of a degree C */
 	int status;       /* BatteryManager.BATTERY_STATUS_*, 2 = charging, 5 = full */
 
+	/* BatteryManager.getIntProperty(CURRENT_NOW / CHARGE_COUNTER), in uA / uAh.
+	 * INT_MIN when unsupported (Android's own "no value" marker). */
+	int current_now;
+	int charge_counter;
+
 	int api_level;    /* Build.VERSION.SDK_INT */
 
 	/* PowerManager.getThermalHeadroom(10); NaN when not queried, unsupported

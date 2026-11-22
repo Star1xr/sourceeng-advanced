@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <limits>
 #include <stdint.h>
 
@@ -17,6 +18,11 @@ float s_batt_temp_30s_ago = 0.f;
 int64_t s_batt_temp_30s_ms = 0;
 bool s_have_prev_gpu = false;
 float s_prev_gpu = 0.f;
+
+// Moving average of the battery current (uA).
+const int kCurSamples = 10;
+float s_cur_samples[kCurSamples] = {};
+int s_cur_idx = 0;
 
 // Cache of the last result, so battery and GPU temp share one JNI round trip.
 AndroidStats s_cached;
@@ -58,6 +64,7 @@ bool AndroidStats_Get(AndroidStats& out) {
 
     MangoHudAndroidRaw raw;
     raw.level = raw.scale = raw.voltage = raw.temperature = raw.status = -1;
+    raw.current_now = raw.charge_counter = std::numeric_limits<int>::min();
     raw.api_level = 0;
     raw.thermal_headroom = std::numeric_limits<float>::quiet_NaN();
 
@@ -77,6 +84,40 @@ bool AndroidStats_Get(AndroidStats& out) {
     // 3. GPU temperature estimate
     const float t_batt = raw.temperature / 10.0f;
     r.charging = (raw.status == 2) || (raw.status == 5);
+
+    // Power and remaining time from CURRENT_NOW / CHARGE_COUNTER.
+    // Sign differs between devices, so only the magnitude is used and the
+    // charging state comes from the battery status. Values below 10000 are
+    // assumed to be mA instead of uA.
+    const int kNoValue = std::numeric_limits<int>::min();
+    if (raw.current_now != kNoValue && raw.current_now != 0) {
+        float cur_ua = (float)raw.current_now;
+        if (cur_ua < 0.f) cur_ua = -cur_ua;
+        if (cur_ua < 10000.0f)
+            cur_ua *= 1000.0f;
+
+        // Average over the last ~10 samples to steady the numbers.
+        s_cur_samples[s_cur_idx % kCurSamples] = cur_ua;
+        s_cur_idx++;
+        const int n = std::min(s_cur_idx, kCurSamples);
+        float sum = 0.f;
+        for (int i = 0; i < n; i++)
+            sum += s_cur_samples[i];
+        const float avg_ua = sum / n;
+
+        r.watt = r.battery_volt * (avg_ua / 1000000.0f);
+
+        if (raw.charge_counter != kNoValue && raw.charge_counter > 0 && avg_ua > 0.f) {
+            float hours = 0.f;
+            if (!r.charging) {
+                hours = raw.charge_counter / avg_ua;
+            } else if (r.battery_percent > 0.f && r.battery_percent < 100.f) {
+                const float full_uah = raw.charge_counter * 100.0f / r.battery_percent;
+                hours = (full_uah - raw.charge_counter) / avg_ua;
+            }
+            r.remaining_hours = clampf(hours, 0.0f, 99.0f);
+        }
+    }
 
     float h;
     if (raw.api_level >= 30) {

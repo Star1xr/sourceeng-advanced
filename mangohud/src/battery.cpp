@@ -48,6 +48,8 @@ void BatteryStats::update() {
             current_percent = s.battery_percent;
             volt = s.battery_volt;
             charging = s.charging;
+            current_watt = s.watt;
+            remaining_time = s.remaining_hours;
         }
         return;
     }

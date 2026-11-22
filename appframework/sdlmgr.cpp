@@ -1262,6 +1262,27 @@ static bool MangoHud_FillAndroidStats( JNIEnv *env, jobject activity, MangoHudAn
 	out->temperature = MangoHud_JniGetInt( env, intent, getIntExtra, "temperature" );
 	out->status = MangoHud_JniGetInt( env, intent, getIntExtra, "status" );
 
+	// BatteryManager.getIntProperty: 1 = CHARGE_COUNTER (uAh), 2 = CURRENT_NOW (uA).
+	{
+		jclass cBM = env->FindClass( "android/os/BatteryManager" );
+		jmethodID getSystemService = env->GetMethodID( cContext, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;" );
+		jmethodID getIntProperty = cBM ? env->GetMethodID( cBM, "getIntProperty", "(I)I" ) : NULL;
+		if ( MangoHud_JniOk( env ) && getSystemService && getIntProperty )
+		{
+			jstring svc = env->NewStringUTF( "batterymanager" );
+			jobject bm = env->CallObjectMethod( activity, getSystemService, svc );
+			if ( MangoHud_JniOk( env ) && bm )
+			{
+				jint counter = env->CallIntMethod( bm, getIntProperty, (jint)1 );
+				if ( MangoHud_JniOk( env ) )
+					out->charge_counter = (int)counter;
+				jint current = env->CallIntMethod( bm, getIntProperty, (jint)2 );
+				if ( MangoHud_JniOk( env ) )
+					out->current_now = (int)current;
+			}
+		}
+	}
+
 	// PowerManager.getThermalHeadroom(int) exists since API 30.
 	if ( queryHeadroom && out->api_level >= 30 )
 	{
@@ -1290,6 +1311,7 @@ static int MangoHud_GetAndroidStats( MangoHudAndroidRaw *out, int queryHeadroom 
 		return 0;
 
 	out->level = out->scale = out->voltage = out->temperature = out->status = -1;
+	out->current_now = out->charge_counter = std::numeric_limits<int>::min();
 	out->thermal_headroom = std::numeric_limits<float>::quiet_NaN();
 
 	static int s_apiLevel = 0;
