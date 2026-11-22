@@ -39,7 +39,10 @@ void GamepadUI::Initialize( CreateInterfaceFn factory )
 
     CreateInterfaceFn gameuiFactory = s_GameUI.GetFactory();
     if ( gameuiFactory )
+    {
         m_pGameUI = (IGameUI*) gameuiFactory( GAMEUI_INTERFACE_VERSION, NULL );
+        m_pGameConsole = (IGameConsole*) gameuiFactory( GAMECONSOLE_INTERFACE_VERSION, NULL );
+    }
 
     m_pAchievementMgr = (IAchievementMgr*) m_pEngineClient->GetAchievementMgr();
 

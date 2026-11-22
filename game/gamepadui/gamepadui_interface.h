@@ -10,6 +10,7 @@
 #include "engine/IEngineSound.h"
 #include "gamepadui_gradient_helper.h"
 #include "GameUI/IGameUI.h"
+#include "GameUI/IGameConsole.h"
 #include "iachievementmgr.h"
 #include "ienginevgui.h"
 #include "ivrenderview.h"
@@ -63,6 +64,7 @@ public:
     IEngineSound            *GetEngineSound()            const { return m_pEngineSound; }
     IEngineVGui             *GetEngineVGui()             const { return m_pEngineVGui; }
     IGameUI                 *GetGameUI()                 const { return m_pGameUI; }
+    IGameConsole            *GetGameConsole()            const { return m_pGameConsole; }
     IGameUIFuncs            *GetGameUIFuncs()            const { return m_pGameUIFuncs; }
     IMaterialSystem         *GetMaterialSystem()         const { return m_pMaterialSystem; }
     IMatSystemSurface       *GetMaterialSystemSurface()  const { return m_pMaterialSystemSurface; }
@@ -92,6 +94,7 @@ private:
     IVRenderView            *m_pRenderView             = NULL;
 
     IGameUI                 *m_pGameUI                 = NULL;
+    IGameConsole            *m_pGameConsole            = NULL;
     IAchievementMgr         *m_pAchievementMgr         = NULL;
 
     vgui::AnimationController *m_pAnimationController = NULL;

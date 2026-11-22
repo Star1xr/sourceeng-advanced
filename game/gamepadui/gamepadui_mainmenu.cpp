@@ -43,19 +43,84 @@ void GamepadUIMainMenu::UpdateGradients()
     GamepadUI::GetInstance().GetGradientHelper()->SetTargetGradient( GradientSide::Left, { 1.0f, 0.666f }, flTime );
 }
 
+// Small ">_" icon in the top right corner that opens / closes the console.
+// Drawn with plain vgui primitives so it needs no material or other asset.
+class GamepadUIConsoleIcon : public vgui::Panel
+{
+    DECLARE_CLASS_SIMPLE( GamepadUIConsoleIcon, vgui::Panel );
+public:
+    GamepadUIConsoleIcon( vgui::Panel *pParent ) : BaseClass( pParent, "ConsoleIcon" )
+    {
+        SetMouseInputEnabled( true );
+        SetKeyBoardInputEnabled( false );
+        SetPaintBackgroundEnabled( false );
+        SetZPos( 200 );
+    }
+
+    void OnThink() OVERRIDE
+    {
+        BaseClass::OnThink();
+
+        int nParentW, nParentH;
+        GetParent()->GetSize( nParentW, nParentH );
+        int nSize = MAX( 48, nParentH / 12 );
+        int nMargin = nSize / 3;
+        SetBounds( nParentW - nSize - nMargin, nMargin, nSize, nSize );
+    }
+
+    void Paint() OVERRIDE
+    {
+        int w, h;
+        GetSize( w, h );
+        const bool bHover = IsCursorOver();
+
+        vgui::surface()->DrawSetColor( 0, 0, 0, bHover ? 200 : 130 );
+        vgui::surface()->DrawFilledRect( 0, 0, w, h );
+
+        const int nA = bHover ? 255 : 200;
+        vgui::surface()->DrawSetColor( 255, 255, 255, nA );
+        vgui::surface()->DrawOutlinedRect( 0, 0, w, h );
+
+        // chevron ">"
+        const int t = MAX( 2, w / 16 );
+        const int x0 = w * 22 / 100, x1 = w * 46 / 100;
+        const int yc = h / 2;
+        const int dy = h * 16 / 100;
+        for ( int i = 0; i < t; i++ )
+        {
+            vgui::surface()->DrawLine( x0 + i, yc - dy, x1 + i, yc );
+            vgui::surface()->DrawLine( x0 + i, yc + dy, x1 + i, yc );
+        }
+        // cursor "_"
+        vgui::surface()->DrawFilledRect( w * 54 / 100, yc + dy - t, w * 78 / 100, yc + dy );
+    }
+
+    void OnMouseReleased( vgui::MouseCode code ) OVERRIDE
+    {
+        BaseClass::OnMouseReleased( code );
+        if ( code != MOUSE_LEFT )
+            return;
+
+        IGameConsole *pConsole = GamepadUI::GetInstance().GetGameConsole();
+        if ( !pConsole )
+            return;
+
+        if ( pConsole->IsConsoleVisible() )
+            pConsole->Hide();
+        else
+            pConsole->Activate();
+    }
+};
+
 void GamepadUIMainMenu::LoadMenuButtons()
 {
     KeyValues* pDataFile = new KeyValues( "MainMenuScript" );
     if ( pDataFile )
     {
-        bool bHasConsoleButton = false;
         if ( pDataFile->LoadFromFile( g_pFullFileSystem, GAMEPADUI_MAINMENU_FILE ) )
         {
             for ( KeyValues* pData = pDataFile->GetFirstSubKey(); pData != NULL; pData = pData->GetNextKey() )
             {
-                if ( V_stristr( pData->GetString( "command" ), "toggleconsole" ) )
-                    bHasConsoleButton = true;
-
                 GamepadUIButton* pButton = new GamepadUIButton(
                     this, this,
                     GAMEPADUI_MAINMENU_SCHEME,
@@ -73,24 +138,10 @@ void GamepadUIMainMenu::LoadMenuButtons()
             }
         }
 
-        // Touch devices have no ~ key, so always offer a console button
-        // unless mainmenu.res already defines one.
-        if ( !bHasConsoleButton )
-        {
-            GamepadUIButton* pButton = new GamepadUIButton(
-                this, this,
-                GAMEPADUI_MAINMENU_SCHEME,
-                "cmd toggleconsole",
-                "Console",
-                "Open the developer console" );
-            pButton->SetPriority( -1 );
-            pButton->SetVisible( true );
-            m_Buttons[ GamepadUIMenuStates::InGame ].AddToTail( pButton );
-            m_Buttons[ GamepadUIMenuStates::MainMenu ].AddToTail( pButton );
-        }
-
         pDataFile->deleteThis();
     }
+
+    new GamepadUIConsoleIcon( this );
 
     UpdateButtonVisibility();
 }

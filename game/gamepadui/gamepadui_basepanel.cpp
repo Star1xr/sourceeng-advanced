@@ -47,6 +47,24 @@ void GamepadUIBasePanel::ApplySchemeSettings( vgui::IScheme* pScheme )
     m_pMainMenu->InvalidateLayout( false, true );
 }
 
+// The console lives in GameUI and is a sibling popup of this panel. Keep
+// GamepadUI behind it while it is open, otherwise the console is drawn under
+// the menu and never gets keyboard focus.
+void GamepadUIBasePanel::OnThink()
+{
+    BaseClass::OnThink();
+
+    IGameConsole *pConsole = GamepadUI::GetInstance().GetGameConsole();
+    bool bVisible = pConsole && pConsole->IsConsoleVisible();
+    if ( bVisible )
+    {
+        vgui::surface()->MovePopupToBack( GetVPanel() );
+        if ( !m_bConsoleWasVisible )
+            pConsole->Activate();
+    }
+    m_bConsoleWasVisible = bVisible;
+}
+
 GamepadUIMainMenu* GamepadUIBasePanel::GetMainMenuPanel() const
 {
     return m_pMainMenu;

@@ -15,6 +15,7 @@ public:
     GamepadUIBasePanel( vgui::VPANEL parent );
 
     void ApplySchemeSettings( vgui::IScheme* pScheme ) OVERRIDE;
+    void OnThink() OVERRIDE;
 
     GamepadUIMainMenu *GetMainMenuPanel() const;
 
@@ -30,6 +31,7 @@ private:
 
     int m_nBackgroundMusicGUID;
     bool m_bBackgroundMusicEnabled;
+    bool m_bConsoleWasVisible = false;
 
 };
 
