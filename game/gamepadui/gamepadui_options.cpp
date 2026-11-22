@@ -639,37 +639,42 @@ public:
         return ( m_flValue - m_flMin ) / ( m_flMax - m_flMin );
     }
 
+    // Sliders without an explicit "textprecision" (the Audio tab, for
+    // example) still need the touch arrows, so show the value with a
+    // sensible default precision instead of hiding the whole block.
+    int GetDisplayPrecision() const
+    {
+        return nTextPrecision >= 0 ? nTextPrecision : 2;
+    }
+
     virtual void Paint()
     {
         BaseClass::Paint();
 
         const int nBlockRight = m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth;
 
-        if ( nTextPrecision >= 0 )
-        {
-            wchar_t szValue[ 256 ];
-            V_snwprintf( szValue, sizeof( szValue ), L"%.*f", nTextPrecision, m_flValue );
+        wchar_t szValue[ 256 ];
+        V_snwprintf( szValue, sizeof( szValue ), L"%.*f", GetDisplayPrecision(), m_flValue );
 
-            int w, h;
-            vgui::surface()->GetTextSize( m_hTextFont, szValue, w, h );
+        int w, h;
+        vgui::surface()->GetTextSize( m_hTextFont, szValue, w, h );
 
-            const int nScrollerSize = vgui::surface()->GetCharacterWidth( m_hTextFont, L'<' ) + vgui::surface()->GetCharacterWidth( m_hTextFont, L' ' );
-            const int nTextX = nBlockRight - nScrollerSize - w;
-            const int nTextY = m_flHeight / 2 - h / 2;
+        const int nScrollerSize = vgui::surface()->GetCharacterWidth( m_hTextFont, L'<' ) + vgui::surface()->GetCharacterWidth( m_hTextFont, L' ' );
+        const int nTextX = nBlockRight - nScrollerSize - w;
+        const int nTextY = m_flHeight / 2 - h / 2;
 
-            // Always draw the arrows: a touch screen has no hover state to reveal them.
-            vgui::surface()->DrawSetTextFont( m_hTextFont );
-            vgui::surface()->DrawSetTextColor( m_colTextColor );
+        // Always draw the arrows: a touch screen has no hover state to reveal them.
+        vgui::surface()->DrawSetTextFont( m_hTextFont );
+        vgui::surface()->DrawSetTextColor( m_colTextColor );
 
-            vgui::surface()->DrawSetTextPos( nTextX - nScrollerSize, nTextY );
-            vgui::surface()->DrawPrintText( L"< ", 2 );
+        vgui::surface()->DrawSetTextPos( nTextX - nScrollerSize, nTextY );
+        vgui::surface()->DrawPrintText( L"< ", 2 );
 
-            vgui::surface()->DrawSetTextPos( nTextX, nTextY );
-            vgui::surface()->DrawPrintText( szValue, V_wcslen( szValue ) );
+        vgui::surface()->DrawSetTextPos( nTextX, nTextY );
+        vgui::surface()->DrawPrintText( szValue, V_wcslen( szValue ) );
 
-            vgui::surface()->DrawSetTextPos( nBlockRight - nScrollerSize, nTextY );
-            vgui::surface()->DrawPrintText( L" >", 2 );
-        }
+        vgui::surface()->DrawSetTextPos( nBlockRight - nScrollerSize, nTextY );
+        vgui::surface()->DrawPrintText( L" >", 2 );
 
         vgui::surface()->DrawSetColor( m_colSliderBacking );
         vgui::surface()->DrawFilledRect( m_flWidth - m_flTextOffsetX - m_flSliderWidth, m_flHeight / 2 - m_flSliderHeight / 2, m_flWidth - m_flTextOffsetX, m_flHeight / 2 + m_flSliderHeight / 2 );
@@ -684,14 +689,14 @@ public:
     {
         m_nMouseArrow = 0;
 
-        if ( code == MOUSE_LEFT && IsEnabled() && nTextPrecision >= 0 )
+        if ( code == MOUSE_LEFT && IsEnabled() )
         {
             int x, y;
             vgui::input()->GetCursorPos( x, y );
             ScreenToLocal( x, y );
 
             wchar_t szValue[ 256 ];
-            V_snwprintf( szValue, sizeof( szValue ), L"%.*f", nTextPrecision, m_flValue );
+            V_snwprintf( szValue, sizeof( szValue ), L"%.*f", GetDisplayPrecision(), m_flValue );
 
             int nTextW, nTextH;
             vgui::surface()->GetTextSize( m_hTextFont, szValue, nTextW, nTextH );
