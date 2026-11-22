@@ -2,6 +2,7 @@
 #include <spdlog/spdlog.h>
 #include <filesystem.h>
 #include "battery.h"
+#include "android_stats.h"
 
 namespace fs = ghc::filesystem;
 using namespace std;
@@ -32,9 +33,23 @@ void BatteryStats::numBattery() {
 void BatteryStats::update() {
     if (!batt_check) {
         numBattery();
-        if (batt_count == 0) {
+        if (batt_count == 0 && AndroidStats_Available()) {
+            // sysfs is not readable on Android 12; use BatteryManager.
+            from_android = true;
+            batt_count = 1;
+        } else if (batt_count == 0) {
             SPDLOG_ERROR("No battery found");
         }
+    }
+
+    if (from_android) {
+        AndroidStats s;
+        if (AndroidStats_Get(s)) {
+            current_percent = s.battery_percent;
+            volt = s.battery_volt;
+            charging = s.charging;
+        }
+        return;
     }
 
      if (batt_count > 0) {

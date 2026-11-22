@@ -9,6 +9,7 @@
 #include <glad/glad.h>
 
 #include "gl/gl_hud.h"
+#include "android_stats.h"
 
 /* Read by the patched MangoHud file_utils.cpp. Kept in the global namespace
  * so the vendored code can find it without a new public header. */
@@ -88,6 +89,7 @@ extern "C" int MangoHud_Init(const MangoHudDesc *desc)
 
 	g_api = desc->api;
 	g_get_proc_address = desc->get_proc_address;
+	AndroidStats_SetCallback(desc->get_android_stats);
 
 	if (desc->config_dir && desc->config_dir[0])
 	{

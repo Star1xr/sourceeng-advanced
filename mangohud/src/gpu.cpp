@@ -1,4 +1,5 @@
 #include "gpu.h"
+#include "android_stats.h"
 #include <inttypes.h>
 #include <memory>
 #include <functional>
@@ -134,12 +135,23 @@ void getKgslGpuInfo(){
             gpu_info.CoreClock = (int)(hz / 1000000);
     }
 
+    bool have_real_temp = false;
     if (temp) {
         rewind(temp);
         fflush(temp);
         int v = 0;
-        if (fscanf(temp, "%d", &v) == 1)
+        if (fscanf(temp, "%d", &v) == 1 && v > 0) {
             gpu_info.temp = v > 1000 ? v / 1000 : v;
+            have_real_temp = true;
+        }
+    }
+
+    // kgsl exposes no usable temperature to apps on Android 12: estimate it
+    // from the battery temperature, thermal headroom and recent heating.
+    if (!have_real_temp) {
+        AndroidStats s;
+        if (AndroidStats_Get(s))
+            gpu_info.temp = (int)(s.gpu_temp + 0.5f);
     }
 #endif
 }

@@ -13,6 +13,28 @@ typedef enum MangoHudApi
 	MANGOHUD_API_DX9 = 2,
 } MangoHudApi;
 
+/* Raw values gathered on the Android side (Java BatteryManager/PowerManager).
+ * All math (percent, volts, GPU temperature estimate) is done inside MangoHud. */
+typedef struct MangoHudAndroidRaw
+{
+	/* Extras of the sticky ACTION_BATTERY_CHANGED intent (-1 if missing). */
+	int level;
+	int scale;
+	int voltage;      /* mV on most devices, some report V */
+	int temperature;  /* tenths of a degree C */
+	int status;       /* BatteryManager.BATTERY_STATUS_*, 2 = charging, 5 = full */
+
+	int api_level;    /* Build.VERSION.SDK_INT */
+
+	/* PowerManager.getThermalHeadroom(10); NaN when not queried, unsupported
+	 * (API < 30) or the device returned NaN. */
+	float thermal_headroom;
+} MangoHudAndroidRaw;
+
+/* Fills *out, returns non-zero on success. Only queries the (more expensive)
+ * thermal headroom when query_headroom is non-zero. */
+typedef int (*MangoHudAndroidStatsFn)(MangoHudAndroidRaw *out, int query_headroom);
+
 typedef struct MangoHudDesc
 {
 	MangoHudApi api;
@@ -28,6 +50,10 @@ typedef struct MangoHudDesc
 
 	/* Used only when no MangoHud.conf is found. May be NULL. */
 	const char *default_config;
+
+	/* Android only, may be NULL. Provides battery percent/voltage and the
+	 * inputs of the GPU temperature estimate. */
+	MangoHudAndroidStatsFn get_android_stats;
 } MangoHudDesc;
 
 /* Returns non-zero on success. Safe to call more than once. */

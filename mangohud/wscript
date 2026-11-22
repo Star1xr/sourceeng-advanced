@@ -24,6 +24,7 @@ def configure(conf):
 def build(bld):
 	src = [
 		'amdgpu.cpp',
+		'android_stats.cpp',
 		'battery.cpp',
 		'blacklist.cpp',
 		'config.cpp',

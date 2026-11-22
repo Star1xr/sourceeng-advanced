@@ -16,6 +16,10 @@ class BatteryStats{
         std::string state [2];
         int batt_count=0;
         bool batt_check = false;
+        // Port: values come from Android's BatteryManager instead of sysfs.
+        bool from_android = false;
+        float volt = 0;
+        bool charging = false;
         std::vector<float> current_now_vec = {};
 };
 

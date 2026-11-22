@@ -1005,7 +1005,22 @@ void HudElements::battery(){
                 ImGui::SameLine(0,1.0f);
                 HUDElements.TextColored(HUDElements.colors.text, "%%");
             }
-            if (Battery_Stats.current_watt != 0) {
+            if (Battery_Stats.from_android) {
+                // Port: no current/power on Android, show voltage (opt-in) and
+                // the plug icon only while charging.
+                if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_battery_voltage]) {
+                    ImguiNextColumnOrNewRow();
+                    right_aligned_text(HUDElements.colors.text, HUDElements.ralign_width, "%.2f", Battery_Stats.volt);
+                    ImGui::SameLine(0,1.0f);
+                    ImGui::PushFont(HUDElements.sw_stats->font1);
+                    HUDElements.TextColored(HUDElements.colors.text, "V");
+                    ImGui::PopFont();
+                }
+                if (Battery_Stats.charging) {
+                    ImguiNextColumnOrNewRow();
+                    right_aligned_text(HUDElements.colors.text, HUDElements.ralign_width, "%s", ICON_FK_PLUG);
+                }
+            } else if (Battery_Stats.current_watt != 0) {
                 if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_battery_watt]){
                     ImguiNextColumnOrNewRow();
                     if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_hud_compact] && Battery_Stats.current_watt >= 10.0f)

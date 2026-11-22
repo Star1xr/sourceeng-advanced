@@ -27,6 +27,9 @@
 #include "mangohud/mangohud.h"
 #include <limits.h>
 #include <unistd.h>
+#include <limits>
+#include <jni.h>
+#include <sys/system_properties.h>
 #endif
 
 // NOTE: This has to be the last file included! (turned off below, since this is included like a header)
@@ -1204,6 +1207,121 @@ void CSDLMgr::OnFrameRendered()
 #if defined( ANDROID ) && defined( TOGLES )
 static int s_MangoHudState = -1; // -1 unknown, 0 disabled, 1 enabled
 
+// ---- Android battery / thermal info for MangoHud (via JNI) ----------------
+// Reads the sticky ACTION_BATTERY_CHANGED intent and PowerManager thermal
+// headroom. Needs no permission. Only raw values are returned here.
+
+static bool MangoHud_JniOk( JNIEnv *env )
+{
+	if ( env->ExceptionCheck() )
+	{
+		env->ExceptionClear();
+		return false;
+	}
+	return true;
+}
+
+static int MangoHud_JniGetInt( JNIEnv *env, jobject intent, jmethodID getIntExtra, const char *key )
+{
+	jstring jkey = env->NewStringUTF( key );
+	jint v = env->CallIntMethod( intent, getIntExtra, jkey, (jint)-1 );
+	if ( !MangoHud_JniOk( env ) )
+		v = -1;
+	env->DeleteLocalRef( jkey );
+	return (int)v;
+}
+
+static bool MangoHud_FillAndroidStats( JNIEnv *env, jobject activity, MangoHudAndroidRaw *out, int queryHeadroom )
+{
+	jclass cContext = env->FindClass( "android/content/Context" );
+	jclass cFilter = env->FindClass( "android/content/IntentFilter" );
+	jclass cIntent = env->FindClass( "android/content/Intent" );
+	if ( !MangoHud_JniOk( env ) || !cContext || !cFilter || !cIntent )
+		return false;
+
+	jmethodID filterCtor = env->GetMethodID( cFilter, "<init>", "(Ljava/lang/String;)V" );
+	jmethodID registerReceiver = env->GetMethodID( cContext, "registerReceiver",
+		"(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent;" );
+	jmethodID getIntExtra = env->GetMethodID( cIntent, "getIntExtra", "(Ljava/lang/String;I)I" );
+	if ( !MangoHud_JniOk( env ) || !filterCtor || !registerReceiver || !getIntExtra )
+		return false;
+
+	jstring action = env->NewStringUTF( "android.intent.action.BATTERY_CHANGED" );
+	jobject filter = env->NewObject( cFilter, filterCtor, action );
+	if ( !MangoHud_JniOk( env ) || !filter )
+		return false;
+
+	// A null receiver just returns the sticky intent; nothing to unregister.
+	jobject intent = env->CallObjectMethod( activity, registerReceiver, (jobject)NULL, filter );
+	if ( !MangoHud_JniOk( env ) || !intent )
+		return false;
+
+	out->level = MangoHud_JniGetInt( env, intent, getIntExtra, "level" );
+	out->scale = MangoHud_JniGetInt( env, intent, getIntExtra, "scale" );
+	out->voltage = MangoHud_JniGetInt( env, intent, getIntExtra, "voltage" );
+	out->temperature = MangoHud_JniGetInt( env, intent, getIntExtra, "temperature" );
+	out->status = MangoHud_JniGetInt( env, intent, getIntExtra, "status" );
+
+	// PowerManager.getThermalHeadroom(int) exists since API 30.
+	if ( queryHeadroom && out->api_level >= 30 )
+	{
+		jclass cPM = env->FindClass( "android/os/PowerManager" );
+		jmethodID getSystemService = env->GetMethodID( cContext, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;" );
+		jmethodID getThermalHeadroom = cPM ? env->GetMethodID( cPM, "getThermalHeadroom", "(I)F" ) : NULL;
+		if ( MangoHud_JniOk( env ) && getSystemService && getThermalHeadroom )
+		{
+			jstring svc = env->NewStringUTF( "power" );
+			jobject pm = env->CallObjectMethod( activity, getSystemService, svc );
+			if ( MangoHud_JniOk( env ) && pm )
+			{
+				jfloat h = env->CallFloatMethod( pm, getThermalHeadroom, (jint)10 );
+				if ( MangoHud_JniOk( env ) )
+					out->thermal_headroom = h;
+			}
+		}
+	}
+
+	return true;
+}
+
+static int MangoHud_GetAndroidStats( MangoHudAndroidRaw *out, int queryHeadroom )
+{
+	if ( !out )
+		return 0;
+
+	out->level = out->scale = out->voltage = out->temperature = out->status = -1;
+	out->thermal_headroom = std::numeric_limits<float>::quiet_NaN();
+
+	static int s_apiLevel = 0;
+	if ( !s_apiLevel )
+	{
+		char value[PROP_VALUE_MAX] = { 0 };
+		if ( __system_property_get( "ro.build.version.sdk", value ) > 0 )
+			s_apiLevel = atoi( value );
+	}
+	out->api_level = s_apiLevel;
+
+	JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
+	if ( !env )
+		return 0;
+
+	// The engine's main loop lives inside one native call from Java, so local
+	// references are never released automatically: scope them in a frame.
+	if ( env->PushLocalFrame( 48 ) != 0 )
+	{
+		env->ExceptionClear();
+		return 0;
+	}
+
+	bool ok = false;
+	jobject activity = (jobject)SDL_AndroidGetActivity();
+	if ( activity )
+		ok = MangoHud_FillAndroidStats( env, activity, out, queryHeadroom );
+
+	env->PopLocalFrame( NULL );
+	return ok ? 1 : 0;
+}
+
 static bool MangoHud_MaybeRender( SDL_Window *window )
 {
 	if ( s_MangoHudState < 0 )
@@ -1221,6 +1339,7 @@ static bool MangoHud_MaybeRender( SDL_Window *window )
 			desc.api = MANGOHUD_API_GLES;
 			desc.get_proc_address = SDL_GL_GetProcAddress;
 			desc.config_dir = cwd;
+			desc.get_android_stats = MangoHud_GetAndroidStats;
 			desc.default_config =
 				"fps,frametime,cpu_stats,ram,position=top-left,"
 				"gpu_stats,vram=0,gpu_temp=0,gpu_power=0,gpu_clock=0,"
