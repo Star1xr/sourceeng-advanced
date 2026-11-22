@@ -66,18 +66,23 @@ def build(bld):
 	defines = ['GAMEPADUI_DLL', 'VERSION_SAFE_STEAM_API_INTERFACES']
 	defines += games[bld.env.GAMES]
 
+	# Order matters: these are static libs and GNU ld resolves symbols
+	# left-to-right, so libraries that *use* tier1/mathlib symbols
+	# (vgui_controls, matsys_controls) must come before them, exactly like in
+	# game/client/wscript. Otherwise we get undefined references to
+	# CUtlMemoryPool::* and pfVectorNormalize at link time.
 	libs = [
 		'tier0',
+		'vgui_controls',
+		'matsys_controls',
 		'tier1',
 		'tier2',
 		'tier3',
-		'vstdlib',
 		'mathlib',
+		'vstdlib',
+		'choreoobjects',
 		'bitmap',
 		'vtf',
-		'choreoobjects',
-		'vgui_controls',
-		'matsys_controls',
 		'SDL2',  # gamepadui_options.cpp queries display bounds; also provides SDL.h
 		'ZLIB',
 	]
