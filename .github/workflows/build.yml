@@ -103,3 +103,123 @@ jobs:
           name: apklibs-${{ matrix.arch }}
           path: apklibs
           if-no-files-found: error
+
+  # Builds the launcher (Star1xr/srcengoveye, private, Gradle) with the native
+  # libraries from the build job(s) into one debug-signed APK. Runs even if one
+  # architecture failed, so you still get an APK for the other one.
+  package-apk:
+    name: package-apk
+    needs: build-android
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    env:
+      LAUNCHER_REPO: Star1xr/srcengoveye
+      LAUNCHER_TOKEN: ${{ secrets.LAUNCHER_TOKEN }}
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      SDK_CMDTOOLS: commandlinetools-linux-11076708_latest
+      SDK_PACKAGES: platforms;android-29 build-tools;33.0.1
+
+    steps:
+      # The launcher repo is private, so the default GITHUB_TOKEN cannot read it.
+      # Add a fine-grained PAT (Contents: read on the launcher repo) as the
+      # repository secret LAUNCHER_TOKEN.
+      - name: Check launcher access token
+        id: tok
+        run: |
+          if [ -z "$LAUNCHER_TOKEN" ]; then
+            echo "::warning::Secret LAUNCHER_TOKEN is not set, skipping the APK. Add a token with read access to $LAUNCHER_REPO."
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout launcher
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LAUNCHER_REPO }}
+          ref: android-fixes
+          token: ${{ secrets.LAUNCHER_TOKEN }}
+          path: launcher
+
+      - name: Download native libraries
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apklibs-*
+          path: launcher/libs
+          merge-multiple: true
+
+      # Every ABI that is packaged must have the launcher entry point and SDL2,
+      # otherwise the app fails at startup with UnsatisfiedLinkError.
+      - name: Verify native libraries
+        if: steps.tok.outputs.have == 'true'
+        working-directory: launcher
+        run: |
+          set -eu
+          [ -d libs ] && [ -n "$(ls -A libs)" ] || { echo "::error::no native libraries were built"; exit 1; }
+          for d in libs/*/; do
+            for f in libSDL2.so liblauncher.so libengine.so; do
+              [ -f "$d$f" ] || { echo "::error::$d$f is missing"; exit 1; }
+            done
+            echo "$d: $(ls "$d" | wc -l) libraries"
+          done
+
+      - name: Cache Android SDK
+        if: steps.tok.outputs.have == 'true'
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: android-sdk
+          key: android-sdk-${{ env.SDK_CMDTOOLS }}-${{ env.SDK_PACKAGES }}
+
+      - name: Install Android SDK
+        if: steps.tok.outputs.have == 'true' && steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -sSL -o cmdtools.zip "https://dl.google.com/android/repository/$SDK_CMDTOOLS.zip"
+          unzip -q cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          rm -f cmdtools.zip
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          "$SDKM" --sdk_root="$ANDROID_HOME" $SDK_PACKAGES > /dev/null
+
+      - name: Cache Gradle
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('launcher/**/*.gradle', 'launcher/gradle/wrapper/gradle-wrapper.properties', 'launcher/gradle.properties') }}
+          restore-keys: gradle-
+
+      # Gradle 8.3 / AGP 8.1 need JDK 17; the runner's default JAVA_HOME may be
+      # newer and unparsable, so point at the preinstalled 17 explicitly.
+      - name: Build APK
+        if: steps.tok.outputs.have == 'true'
+        working-directory: launcher
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          mkdir -p "$HOME/.android" && cp debug.keystore "$HOME/.android/"
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --build-cache --parallel
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/srceng-debug.apk
+          echo "### APK contents" >> "$GITHUB_STEP_SUMMARY"
+          unzip -l out/srceng-debug.apk | grep -E "lib/|classes.*dex|AndroidManifest|extras_dir" | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
+          ls -l out/srceng-debug.apk
+
+      # archive: false uploads the APK itself instead of a zip around it (single
+      # file only; the artifact is named after the file, so no `name` here).
+      - name: Upload APK
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          path: launcher/out/srceng-debug.apk
+          archive: false
+          if-no-files-found: error

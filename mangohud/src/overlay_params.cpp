@@ -1108,7 +1108,6 @@ void presets(int preset, struct overlay_params *params, bool inherit) {
          add_to_options(params, "gpu_power", "1");
          add_to_options(params, "cpu_power", "1");
          add_to_options(params, "battery_watt", "1");
-         add_to_options(params, "battery_time", "1");
          add_to_options(params, "debug", "0");
          break;
 
