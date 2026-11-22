@@ -183,9 +183,14 @@ jobs:
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
-          BT="$SDK/build-tools/34.0.0"
-          ANDROID_JAR="$SDK/platforms/android-34/android.jar"
+          # build-tools 34's d8 (R8 8.2.2) crashes on class files from newer JDKs
+          # (NullPointerException in the dex writer), so use 35 and javac 17.
+          "$SDKM" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          BT="$SDK/build-tools/35.0.0"
+          ANDROID_JAR="$SDK/platforms/android-35/android.jar"
+          JAVAC=javac
+          [ -x "${JAVA_HOME_17_X64:-}/bin/javac" ] && JAVAC="$JAVA_HOME_17_X64/bin/javac"
+          "$JAVAC" -version
 
           rm -rf out && mkdir -p out/compiled out/gen out/classes out/stage
 
@@ -196,7 +201,7 @@ jobs:
             --java out/gen out/compiled/*.flat
 
           # Java -> classes -> dex.
-          javac --release 8 -nowarn -cp "$ANDROID_JAR" -d out/classes \
+          "$JAVAC" --release 8 -nowarn -cp "$ANDROID_JAR" -d out/classes \
             $(find src out/gen -name '*.java')
           "$BT/d8" --min-api 17 --lib "$ANDROID_JAR" --output out \
             $(find out/classes -name '*.class')
