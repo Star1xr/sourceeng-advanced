@@ -54,6 +54,34 @@ jobs:
           chmod +x scripts/build-android-${{ matrix.arch }}.sh
           ./scripts/build-android-${{ matrix.arch }}.sh
 
+      # Everything the launcher APK needs for this ABI, flattened into
+      # apklibs/<abi>/. libSDL2.so is a prebuilt from the `lib` submodule (it is
+      # only copied by `waf install`), so it is not in build/ and must be added
+      # explicitly. The STL is linked statically, no other runtime .so is needed.
+      - name: Collect APK libraries
+        run: |
+          set -eu
+          case "${{ matrix.arch }}" in
+            arm64)  ABI=arm64-v8a ;;
+            armv7a) ABI=armeabi-v7a ;;
+            *) echo "::error::unknown arch ${{ matrix.arch }}"; exit 1 ;;
+          esac
+          CPU=$(sed -n "s/^DEST_CPU *= *'\(.*\)'.*/\1/p" build/c4che/_cache.py | head -n 1)
+          echo "ABI=$ABI DEST_CPU=$CPU"
+
+          mkdir -p "apklibs/$ABI"
+          find build -name '*.so' -type f | sed 's|.*/||' | sort | uniq -d | sed 's/^/::warning::duplicate library name, keeping the first: /'
+          find build -name '*.so' -type f -exec cp -n {} "apklibs/$ABI/" \;
+
+          SDL="lib/android/$CPU/libSDL2.so"
+          if [ ! -f "$SDL" ]; then
+            echo "::error::$SDL not found"
+            ls -R lib/android | head -n 40
+            exit 1
+          fi
+          cp "$SDL" "apklibs/$ABI/"
+          ls -l "apklibs/$ABI"
+
       - name: Show configure log on failure
         if: failure()
         run: tail -n 300 build/config.log || true
@@ -78,3 +106,120 @@ jobs:
         with:
           name: android-${{ matrix.arch }}-bundle
           path: build/**/*.so
+
+      - name: Upload APK libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: apklibs-${{ matrix.arch }}
+          path: apklibs
+          if-no-files-found: error
+
+  # Packages the launcher (Star1xr/srcengoveye, private) together with the
+  # native libraries from the build job(s) into one debug-signed APK. Runs even
+  # if one architecture failed, so you still get an APK for the other one.
+  package-apk:
+    name: package-apk
+    needs: build-android
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    env:
+      LAUNCHER_REPO: Star1xr/srcengoveye
+      LAUNCHER_TOKEN: ${{ secrets.LAUNCHER_TOKEN }}
+
+    steps:
+      # The launcher repo is private, so the default GITHUB_TOKEN cannot read it.
+      # Add a fine-grained PAT (Contents: read on the launcher repo) as the
+      # repository secret LAUNCHER_TOKEN.
+      - name: Check launcher access token
+        id: tok
+        run: |
+          if [ -z "$LAUNCHER_TOKEN" ]; then
+            echo "::warning::Secret LAUNCHER_TOKEN is not set, skipping the APK. Add a token with read access to $LAUNCHER_REPO."
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout launcher
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LAUNCHER_REPO }}
+          token: ${{ secrets.LAUNCHER_TOKEN }}
+          path: launcher
+
+      - name: Download native libraries
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apklibs-*
+          path: launcher/libs
+          merge-multiple: true
+
+      # Every ABI that is packaged must have the launcher entry point and SDL2,
+      # otherwise the app fails at startup with UnsatisfiedLinkError.
+      - name: Verify native libraries
+        if: steps.tok.outputs.have == 'true'
+        working-directory: launcher
+        run: |
+          set -eu
+          [ -d libs ] && [ -n "$(ls -A libs)" ] || { echo "::error::no native libraries were built"; exit 1; }
+          for d in libs/*/; do
+            for f in libSDL2.so liblauncher.so libengine.so; do
+              [ -f "$d$f" ] || { echo "::error::$d$f is missing"; exit 1; }
+            done
+            echo "$d: $(ls "$d" | wc -l) libraries"
+          done
+
+      - name: Build APK
+        if: steps.tok.outputs.have == 'true'
+        working-directory: launcher
+        run: |
+          set -euo pipefail
+
+          # The launcher's ant build needs the long-gone SDK tools/ant files, so
+          # build with the current SDK tools instead: aapt2, javac, d8, apksigner.
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+          BT="$SDK/build-tools/34.0.0"
+          ANDROID_JAR="$SDK/platforms/android-34/android.jar"
+
+          rm -rf out && mkdir -p out/compiled out/gen out/classes out/stage
+
+          # Resources + manifest + assets (extras_dir.vpk), generates R.java.
+          "$BT/aapt2" compile --dir res -o out/compiled
+          "$BT/aapt2" link -o out/base.apk -I "$ANDROID_JAR" \
+            --manifest AndroidManifest.xml -A assets \
+            --java out/gen out/compiled/*.flat
+
+          # Java -> classes -> dex.
+          javac --release 8 -nowarn -cp "$ANDROID_JAR" -d out/classes \
+            $(find src out/gen -name '*.java')
+          "$BT/d8" --min-api 17 --lib "$ANDROID_JAR" --output out \
+            $(find out/classes -name '*.class')
+
+          # Add classes.dex and the native libraries (lib/<abi>/*.so).
+          zip -qj out/base.apk out/classes.dex
+          cp -r libs out/stage/lib
+          (cd out/stage && zip -qr ../base.apk lib)
+
+          "$BT/zipalign" -f -p 4 out/base.apk out/aligned.apk
+          "$BT/apksigner" sign --ks debug.keystore --ks-pass pass:android \
+            --key-pass pass:android --ks-key-alias androiddebugkey \
+            --out out/srceng-debug.apk out/aligned.apk
+          "$BT/apksigner" verify --verbose out/srceng-debug.apk | head -n 8
+
+          echo "### APK contents" >> "$GITHUB_STEP_SUMMARY"
+          unzip -l out/srceng-debug.apk | grep -E "lib/|classes.dex|AndroidManifest" | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
+          ls -l out/srceng-debug.apk
+
+      - name: Upload APK
+        if: steps.tok.outputs.have == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: srceng-debug-apk
+          path: launcher/out/srceng-debug.apk
+          if-no-files-found: error
