@@ -8,6 +8,7 @@ Mostly vibecoded, though no trash code is making it into the repo since I actual
 
 ## Current tasks 
 - Graphics, Shaders & Lighting, UI, HUD & Gamepad Overhaul, Merged episodes backport/fix for 20th anniversary update
+- Some GamepadUI fixes (key binding fix for mouse and touch, touch menu in settings instead of steam input bs)
 
 # Source Engine
 [![GitHub Actions Status](https://github.com/nillerusr/source-engine/actions/workflows/build.yml/badge.svg)](https://github.com/nillerusr/source-engine/actions/workflows/build.yml) [![GitHub Actions Status](https://github.com/nillerusr/source-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/nillerusr/source-engine/actions/workflows/tests.yml)
