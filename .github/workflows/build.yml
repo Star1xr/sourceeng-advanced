@@ -82,10 +82,6 @@ jobs:
           cp "$SDL" "apklibs/$ABI/"
           ls -l "apklibs/$ABI"
 
-      - name: Show configure log on failure
-        if: failure()
-        run: tail -n 300 build/config.log || true
-
       - name: ccache stats
         if: always()
         run: |
@@ -101,132 +97,9 @@ jobs:
           path: .ccache
           key: ccache-${{ matrix.arch }}-${{ github.sha }}
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-${{ matrix.arch }}-bundle
-          path: build/**/*.so
-
       - name: Upload APK libraries
         uses: actions/upload-artifact@v4
         with:
           name: apklibs-${{ matrix.arch }}
           path: apklibs
-          if-no-files-found: error
-
-  # Packages the launcher (Star1xr/srcengoveye, private) together with the
-  # native libraries from the build job(s) into one debug-signed APK. Runs even
-  # if one architecture failed, so you still get an APK for the other one.
-  package-apk:
-    name: package-apk
-    needs: build-android
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-
-    env:
-      LAUNCHER_REPO: Star1xr/srcengoveye
-      LAUNCHER_TOKEN: ${{ secrets.LAUNCHER_TOKEN }}
-
-    steps:
-      # The launcher repo is private, so the default GITHUB_TOKEN cannot read it.
-      # Add a fine-grained PAT (Contents: read on the launcher repo) as the
-      # repository secret LAUNCHER_TOKEN.
-      - name: Check launcher access token
-        id: tok
-        run: |
-          if [ -z "$LAUNCHER_TOKEN" ]; then
-            echo "::warning::Secret LAUNCHER_TOKEN is not set, skipping the APK. Add a token with read access to $LAUNCHER_REPO."
-            echo "have=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "have=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout launcher
-        if: steps.tok.outputs.have == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.LAUNCHER_REPO }}
-          token: ${{ secrets.LAUNCHER_TOKEN }}
-          path: launcher
-
-      - name: Download native libraries
-        if: steps.tok.outputs.have == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          pattern: apklibs-*
-          path: launcher/libs
-          merge-multiple: true
-
-      # Every ABI that is packaged must have the launcher entry point and SDL2,
-      # otherwise the app fails at startup with UnsatisfiedLinkError.
-      - name: Verify native libraries
-        if: steps.tok.outputs.have == 'true'
-        working-directory: launcher
-        run: |
-          set -eu
-          [ -d libs ] && [ -n "$(ls -A libs)" ] || { echo "::error::no native libraries were built"; exit 1; }
-          for d in libs/*/; do
-            for f in libSDL2.so liblauncher.so libengine.so; do
-              [ -f "$d$f" ] || { echo "::error::$d$f is missing"; exit 1; }
-            done
-            echo "$d: $(ls "$d" | wc -l) libraries"
-          done
-
-      - name: Build APK
-        if: steps.tok.outputs.have == 'true'
-        working-directory: launcher
-        run: |
-          set -euo pipefail
-
-          # The launcher's ant build needs the long-gone SDK tools/ant files, so
-          # build with the current SDK tools instead: aapt2, javac, d8, apksigner.
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          # build-tools 34's d8 (R8 8.2.2) crashes on class files from newer JDKs
-          # (NullPointerException in the dex writer), so use 35 and javac 17.
-          "$SDKM" "platforms;android-35" "build-tools;35.0.0" > /dev/null
-          BT="$SDK/build-tools/35.0.0"
-          ANDROID_JAR="$SDK/platforms/android-35/android.jar"
-          JAVAC=javac
-          [ -x "${JAVA_HOME_17_X64:-}/bin/javac" ] && JAVAC="$JAVA_HOME_17_X64/bin/javac"
-          "$JAVAC" -version
-
-          rm -rf out && mkdir -p out/compiled out/gen out/classes out/stage
-
-          # Resources + manifest + assets (extras_dir.vpk), generates R.java.
-          "$BT/aapt2" compile --dir res -o out/compiled
-          "$BT/aapt2" link -o out/base.apk -I "$ANDROID_JAR" \
-            --manifest AndroidManifest.xml -A assets \
-            --java out/gen out/compiled/*.flat
-
-          # Java -> classes -> dex.
-          "$JAVAC" --release 8 -nowarn -cp "$ANDROID_JAR" -d out/classes \
-            $(find src out/gen -name '*.java')
-          "$BT/d8" --min-api 17 --lib "$ANDROID_JAR" --output out \
-            $(find out/classes -name '*.class')
-
-          # Add classes.dex and the native libraries (lib/<abi>/*.so).
-          zip -qj out/base.apk out/classes.dex
-          cp -r libs out/stage/lib
-          (cd out/stage && zip -qr ../base.apk lib)
-
-          "$BT/zipalign" -f -p 4 out/base.apk out/aligned.apk
-          "$BT/apksigner" sign --ks debug.keystore --ks-pass pass:android \
-            --key-pass pass:android --ks-key-alias androiddebugkey \
-            --out out/srceng-debug.apk out/aligned.apk
-          "$BT/apksigner" verify --verbose out/srceng-debug.apk | head -n 8
-
-          echo "### APK contents" >> "$GITHUB_STEP_SUMMARY"
-          unzip -l out/srceng-debug.apk | grep -E "lib/|classes.dex|AndroidManifest" | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
-          ls -l out/srceng-debug.apk
-
-      # archive: false uploads the APK itself instead of a zip around it (single
-      # file only; the artifact is named after the file, so no `name` here).
-      - name: Upload APK
-        if: steps.tok.outputs.have == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          path: launcher/out/srceng-debug.apk
-          archive: false
           if-no-files-found: error

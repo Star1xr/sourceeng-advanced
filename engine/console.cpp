@@ -121,7 +121,16 @@ static ConVar con_trace( "con_trace", "0", FCVAR_MATERIAL_SYSTEM_THREAD, "Print 
 static ConVar con_notifytime( "con_notifytime","8", FCVAR_MATERIAL_SYSTEM_THREAD, "How long to display recent console text to the upper part of the game window" );
 static ConVar con_times("contimes", "8", FCVAR_MATERIAL_SYSTEM_THREAD, "Number of console lines to overlay for debugging." );
 static ConVar con_drawnotify( "con_drawnotify", "1", 0, "Disables drawing of notification area (for taking screenshots)." );
-static ConVar con_enable("con_enable", "0", FCVAR_ARCHIVE, "Allows the console to be activated.");
+// The console must always be available on this port, so force the value back
+// to 1 if anything (archived config, options menu, console command) clears it.
+static void con_enable_changed_f( IConVar *pVar, const char *pOldValue, float flOldValue )
+{
+	ConVarRef var( pVar );
+	if ( var.GetInt() != 1 )
+		var.SetValue( 1 );
+}
+
+static ConVar con_enable("con_enable", "1", FCVAR_ARCHIVE, "Allows the console to be activated.", con_enable_changed_f);
 static ConVar con_filter_enable ( "con_filter_enable","0", FCVAR_MATERIAL_SYSTEM_THREAD, "Filters console output based on the setting of con_filter_text. 1 filters completely, 2 displays filtered text brighter than other text." );
 static ConVar con_filter_text ( "con_filter_text","", FCVAR_MATERIAL_SYSTEM_THREAD, "Text with which to filter console spew. Set con_filter_enable 1 or 2 to activate." );
 static ConVar con_filter_text_out ( "con_filter_text_out","", FCVAR_MATERIAL_SYSTEM_THREAD, "Text with which to filter OUT of console spew. Set con_filter_enable 1 or 2 to activate." );

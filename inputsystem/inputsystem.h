@@ -343,6 +343,7 @@ public:
 	const int GetSteamPadDeadZone( ESteamPadAxis axis );
 	bool IsSteamControllerConnected( void ) { return m_bSteamController; }
 	bool IsSteamControllerActive( void );
+	bool IsPhysicalKeyboardConnected( void );
 	void ActivateSteamControllerActionSetForSlot( uint64 nSlot, GameActionSet_t eActionSet );
 	ControllerActionSetHandle_t GetActionSetHandle( GameActionSet_t eActionSet );
 	ControllerActionSetHandle_t GetActionSetHandle( const char* szActionSet );

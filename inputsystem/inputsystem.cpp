@@ -18,6 +18,11 @@
 static void initKeymap(void);
 #endif
 
+#if defined( ANDROID )
+#include <jni.h>
+#include "SDL_system.h"
+#endif
+
 #ifdef _X360
 #include "xbox/xbox_win32stubs.h"
 #endif
@@ -1012,6 +1017,112 @@ void CInputSystem::StopRumble( void )
 int CInputSystem::GetJoystickCount() const
 {
 	return m_nJoystickCount;
+}
+
+#if defined( ANDROID )
+//-----------------------------------------------------------------------------
+// Returns true when a physical (alphabetic) keyboard is attached. Enumerates
+// Android's InputManager devices and caches the result for one second.
+//-----------------------------------------------------------------------------
+static bool AndroidHasPhysicalKeyboard()
+{
+	enum { KEYBOARD_TYPE_ALPHABETIC = 2 };
+
+	static bool s_bConnected = false;
+	static int s_nNextCheck = 0;
+
+	const int nNow = Plat_MSTime();
+	if ( nNow < s_nNextCheck )
+		return s_bConnected;
+	s_nNextCheck = nNow + 1000;
+	s_bConnected = false;
+
+	JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
+	if ( !env )
+		return false;
+
+	jobject activity = (jobject)SDL_AndroidGetActivity();
+	if ( !activity )
+		return false;
+
+	if ( env->PushLocalFrame( 64 ) != 0 )
+	{
+		env->ExceptionClear();
+		env->DeleteLocalRef( activity );
+		return false;
+	}
+
+	jclass cContext = env->FindClass( "android/content/Context" );
+	jclass cInputManager = env->FindClass( "android/hardware/input/InputManager" );
+	jclass cInputDevice = env->FindClass( "android/view/InputDevice" );
+
+	jmethodID getSystemService = cContext ? env->GetMethodID( cContext, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;" ) : NULL;
+	jmethodID getInputDeviceIds = cInputManager ? env->GetMethodID( cInputManager, "getInputDeviceIds", "()[I" ) : NULL;
+	jmethodID getInputDevice = cInputManager ? env->GetMethodID( cInputManager, "getInputDevice", "(I)Landroid/view/InputDevice;" ) : NULL;
+	jmethodID getKeyboardType = cInputDevice ? env->GetMethodID( cInputDevice, "getKeyboardType", "()I" ) : NULL;
+
+	if ( env->ExceptionCheck() )
+	{
+		env->ExceptionClear();
+	}
+	else if ( getSystemService && getInputDeviceIds && getInputDevice && getKeyboardType )
+	{
+		jstring svc = env->NewStringUTF( "input" );
+		jobject inputManager = env->CallObjectMethod( activity, getSystemService, svc );
+		if ( env->ExceptionCheck() )
+			env->ExceptionClear();
+
+		if ( inputManager )
+		{
+			jintArray ids = (jintArray)env->CallObjectMethod( inputManager, getInputDeviceIds );
+			if ( env->ExceptionCheck() )
+				env->ExceptionClear();
+
+			if ( ids )
+			{
+				const jsize nCount = env->GetArrayLength( ids );
+				jint *pIds = env->GetIntArrayElements( ids, NULL );
+				if ( pIds )
+				{
+					for ( jsize i = 0; i < nCount && !s_bConnected; ++i )
+					{
+						jobject device = env->CallObjectMethod( inputManager, getInputDevice, pIds[ i ] );
+						if ( env->ExceptionCheck() )
+						{
+							env->ExceptionClear();
+							continue;
+						}
+						if ( device )
+						{
+							const jint nType = env->CallIntMethod( device, getKeyboardType );
+							if ( env->ExceptionCheck() )
+								env->ExceptionClear();
+							else if ( nType == KEYBOARD_TYPE_ALPHABETIC )
+								s_bConnected = true;
+
+							env->DeleteLocalRef( device );
+						}
+					}
+					env->ReleaseIntArrayElements( ids, pIds, JNI_ABORT );
+				}
+			}
+		}
+	}
+
+	env->PopLocalFrame( NULL );
+	env->DeleteLocalRef( activity );
+
+	return s_bConnected;
+}
+#endif // ANDROID
+
+bool CInputSystem::IsPhysicalKeyboardConnected()
+{
+#if defined( ANDROID )
+	return AndroidHasPhysicalKeyboard();
+#else
+	return false;
+#endif
 }
 
 void CInputSystem::EnableJoystickInput( int nJoystick, bool bEnable )

@@ -9,6 +9,9 @@
 #include "KeyValues.h"
 #include "filesystem.h"
 
+#include "inputsystem/iinputsystem.h"
+#include "tier2/tier2.h"
+
 #include "tier0/memdbgon.h"
 
 #define GAMEPADUI_MAINMENU_SCHEME GAMEPADUI_RESOURCE_FOLDER "schememainmenu.res"
@@ -43,8 +46,9 @@ void GamepadUIMainMenu::UpdateGradients()
     GamepadUI::GetInstance().GetGradientHelper()->SetTargetGradient( GradientSide::Left, { 1.0f, 0.666f }, flTime );
 }
 
-// Small ">_" icon in the top right corner that opens / closes the console.
+// Small ">_" icon in the bottom right corner that opens / closes the console.
 // Drawn with plain vgui primitives so it needs no material or other asset.
+// Hidden while a physical keyboard is attached: the ~ key can open the console.
 class GamepadUIConsoleIcon : public vgui::Panel
 {
     DECLARE_CLASS_SIMPLE( GamepadUIConsoleIcon, vgui::Panel );
@@ -65,7 +69,8 @@ public:
         GetParent()->GetSize( nParentW, nParentH );
         int nSize = MAX( 48, nParentH / 12 );
         int nMargin = nSize / 3;
-        SetBounds( nParentW - nSize - nMargin, nMargin, nSize, nSize );
+        // Keep clear of the footer button row that also lives bottom-right.
+        SetBounds( nParentW - nSize - nMargin, nParentH - nSize - nMargin - nSize * 2 / 3, nSize, nSize );
     }
 
     void Paint() OVERRIDE
@@ -141,7 +146,7 @@ void GamepadUIMainMenu::LoadMenuButtons()
         pDataFile->deleteThis();
     }
 
-    new GamepadUIConsoleIcon( this );
+    m_pConsoleIcon = new GamepadUIConsoleIcon( this );
 
     UpdateButtonVisibility();
 }
@@ -217,6 +222,11 @@ void GamepadUIMainMenu::PaintLogo()
 void GamepadUIMainMenu::OnThink()
 {
     BaseClass::OnThink();
+
+    // The icon is hidden while a physical keyboard is attached. Update it from
+    // the menu, because a hidden child does not get Think() called.
+    if ( m_pConsoleIcon )
+        m_pConsoleIcon->SetVisible( !g_pInputSystem || !g_pInputSystem->IsPhysicalKeyboardConnected() );
 
     LayoutMainMenu();
 }

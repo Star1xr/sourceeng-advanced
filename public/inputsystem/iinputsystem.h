@@ -159,6 +159,9 @@ public:
 	}
 
 	virtual void StartTextInput() = 0;
+
+	// Returns true when a physical (non-touchscreen) keyboard is attached.
+	virtual bool IsPhysicalKeyboardConnected() = 0;
 };
 
 

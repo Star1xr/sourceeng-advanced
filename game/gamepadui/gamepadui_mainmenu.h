@@ -8,6 +8,8 @@
 #include "gamepadui_button.h"
 #include "gamepadui_image.h"
 
+class GamepadUIConsoleIcon;
+
 namespace GamepadUIMenuStates
 {
     enum GamepadUIMenuState
@@ -51,6 +53,8 @@ private:
     float GetCurrentLogoOffset();
 
     CUtlVector<GamepadUIButton*> m_Buttons[ GamepadUIMenuStates::Count ];
+
+    GamepadUIConsoleIcon *m_pConsoleIcon = NULL;
 
     GamepadUIString m_LogoText[ 2 ];
     GamepadUIImage  m_LogoImage;
