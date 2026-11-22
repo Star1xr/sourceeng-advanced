@@ -49,8 +49,13 @@ struct gpuInfo{
 
 extern struct gpuInfo gpu_info;
 
+/* Port: private vendor ID for Qualcomm Adreno using the proprietary kgsl
+ * driver (Android). Not a PCI ID; it only selects getKgslGpuInfo(). */
+#define MANGOHUD_VENDOR_ADRENO_KGSL 0x4B47534Cu
+
 void getNvidiaGpuInfo(const struct overlay_params& params);
 void getAmdGpuInfo(void);
+void getKgslGpuInfo(void);
 void getIntelGpuInfo();
 bool checkNvidia(const char *pci_dev);
 extern void nvapi_util();

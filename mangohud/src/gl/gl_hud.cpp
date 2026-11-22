@@ -12,6 +12,7 @@
 #include <implot.h>
 #endif
 #include "gl_hud.h"
+#include "gpu.h"
 #include "file_utils.h"
 #include "notify.h"
 #include "blacklist.h"
@@ -145,6 +146,10 @@ void imgui_create(void *ctx, const gl_wsi plat)
         vendorID = 0x8086;
     } else if (vendor.find("freedreno") != std::string::npos) {
         vendorID = 0x5143;
+    } else if (vendor.find("Qualcomm") != std::string::npos
+    || deviceName.find("Adreno") != std::string::npos) {
+        // Proprietary Adreno driver (kgsl): not freedreno, and certainly not NVIDIA.
+        vendorID = MANGOHUD_VENDOR_ADRENO_KGSL;
     }  else {
         vendorID = 0x10de;
     }

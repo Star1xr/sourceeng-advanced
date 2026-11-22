@@ -4,6 +4,7 @@
 #include <functional>
 #include <thread>
 #include <cstring>
+#include <string>
 #include <spdlog/spdlog.h>
 #ifdef HAVE_XNVCTRL
 #include "nvctrl.h"
@@ -82,6 +83,64 @@ void getNvidiaGpuInfo(const struct overlay_params& params){
 #endif
 #ifdef _WIN32
 nvapi_util();
+#endif
+}
+
+// Port: Qualcomm Adreno (proprietary kgsl driver) on Android.
+// All files are optional; whatever can't be opened is just skipped.
+static FILE* kgsl_open(const char* name) {
+    std::string path = std::string("/sys/class/kgsl/kgsl-3d0/") + name;
+    return fopen(path.c_str(), "r");
+}
+
+void getKgslGpuInfo(){
+#ifdef __linux__
+    static bool inited = false;
+    static FILE *busy = nullptr, *busy_pct = nullptr, *clk = nullptr, *temp = nullptr;
+
+    if (!inited) {
+        inited = true;
+        busy = kgsl_open("gpubusy");              // "<busy> <total>"
+        busy_pct = kgsl_open("gpu_busy_percentage"); // newer kernels: percent
+        clk = kgsl_open("gpuclk");                // Hz
+        temp = kgsl_open("temp");                 // milli-degC on most kernels
+        SPDLOG_DEBUG("kgsl: gpubusy={} gpu_busy_percentage={} gpuclk={} temp={}",
+                     busy != nullptr, busy_pct != nullptr, clk != nullptr, temp != nullptr);
+    }
+
+    int load = -1;
+    if (busy) {
+        rewind(busy);
+        fflush(busy);
+        long long b = 0, t = 0;
+        if (fscanf(busy, "%lld %lld", &b, &t) == 2 && t > 0)
+            load = (int)(b * 100 / t);
+    }
+    if (load < 0 && busy_pct) {
+        rewind(busy_pct);
+        fflush(busy_pct);
+        int v = 0;
+        if (fscanf(busy_pct, "%d", &v) == 1)
+            load = v;
+    }
+    if (load >= 0)
+        gpu_info.load = load > 100 ? 100 : load;
+
+    if (clk) {
+        rewind(clk);
+        fflush(clk);
+        long long hz = 0;
+        if (fscanf(clk, "%lld", &hz) == 1)
+            gpu_info.CoreClock = (int)(hz / 1000000);
+    }
+
+    if (temp) {
+        rewind(temp);
+        fflush(temp);
+        int v = 0;
+        if (fscanf(temp, "%d", &v) == 1)
+            gpu_info.temp = v > 1000 ? v / 1000 : v;
+    }
 #endif
 }
 

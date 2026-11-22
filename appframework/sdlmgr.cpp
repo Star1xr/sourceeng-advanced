@@ -1223,7 +1223,7 @@ static bool MangoHud_MaybeRender( SDL_Window *window )
 			desc.config_dir = cwd;
 			desc.default_config =
 				"fps,frametime,cpu_stats,ram,position=top-left,"
-				"gpu_stats=0,vram=0,gpu_temp=0,gpu_power=0,gpu_clock=0,"
+				"gpu_stats,vram=0,gpu_temp=0,gpu_power=0,gpu_clock=0,"
 				"gpu_voltage=0,gpu_fan=0";
 
 			if ( !MangoHud_Init( &desc ) )
