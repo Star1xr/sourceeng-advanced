@@ -358,6 +358,24 @@ protected:
     bool m_bInstantApply = false;
 };
 
+// The option buttons draw "< value >". This maps a local x coordinate to the
+// arrow that was pressed, so touch and mouse can change the value the same way
+// the gamepad does with left/right. nBlockRight is where the ">" ends.
+static int HitTestOptionArrows( vgui::HFont hFont, int nTextW, int nBlockRight, int x )
+{
+    const int nScroller = vgui::surface()->GetCharacterWidth( hFont, L'<' ) + vgui::surface()->GetCharacterWidth( hFont, L' ' );
+    const int nArrowRightX = nBlockRight - nScroller;
+    const int nTextLeft = nArrowRightX - nTextW;
+
+    if ( x >= nTextLeft - nScroller && x < nTextLeft )
+        return -1;
+
+    if ( x >= nArrowRightX && x < nBlockRight )
+        return 1;
+
+    return 0;
+}
+
 class GamepadUIWheelyWheel : public GamepadUIConvarButton
 {
 public:
@@ -371,6 +389,9 @@ public:
 
     void OnKeyCodePressed( vgui::KeyCode code )
     {
+        // A stale mouse arrow must not affect keyboard/gamepad input.
+        m_nMouseArrow = 0;
+
         ButtonCode_t buttonCode = GetBaseButtonCode( code );
         switch ( buttonCode )
         {
@@ -404,12 +425,46 @@ public:
         }
     }
 
+    void OnMousePressed( vgui::MouseCode code ) OVERRIDE
+    {
+        m_nMouseArrow = 0;
+
+        if ( code == MOUSE_LEFT && IsEnabled() && m_nSelectedItem < m_Options.Count() )
+        {
+            int x, y;
+            vgui::input()->GetCursorPos( x, y );
+            ScreenToLocal( x, y );
+
+            GamepadUIString& strOption = m_Options[ m_nSelectedItem ].strOptionText;
+            int nTextW, nTextH;
+            vgui::surface()->GetTextSize( m_hTextFont, strOption.String(), nTextW, nTextH );
+
+            m_nMouseArrow = HitTestOptionArrows( m_hTextFont, nTextW, m_flWidth - m_flTextOffsetX, x );
+        }
+
+        BaseClass::OnMousePressed( code );
+    }
+
     void FireActionSignal()
     {
+        const int nArrow = m_nMouseArrow;
+        m_nMouseArrow = 0;
+
         BaseClass::FireActionSignal();
 
-        if ( m_Options.Count() )
+        if ( !m_Options.Count() )
+            return;
+
+        if ( nArrow < 0 )
+        {
+            if ( --m_nSelectedItem < 0 )
+                m_nSelectedItem = Max( 0, m_Options.Count() - 1 );
+        }
+        else
+        {
             m_nSelectedItem = ( m_nSelectedItem + 1 ) % m_Options.Count();
+        }
+
         if ( m_bInstantApply )
             UpdateConVar();
     }
@@ -439,7 +494,6 @@ public:
             return;
 
         GamepadUIString& strOption = m_Options[ m_nSelectedItem ].strOptionText;
-        ButtonState state = GetCurrentButtonState();
 
         int nTextW, nTextH;
         vgui::surface()->GetTextSize( m_hTextFont, strOption.String(), nTextW, nTextH );
@@ -448,19 +502,18 @@ public:
 
         int nTextY = m_flHeight / 2 - nTextH / 2 + m_flTextOffsetY;
 
+        // Always draw the arrows: a touch screen has no hover state to reveal them.
         vgui::surface()->DrawSetTextFont( m_hTextFont );
-        if ( state != ButtonStates::Out )
-        {
-            vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nTextW - 2 * nScrollerSize, nTextY );
-            vgui::surface()->DrawPrintText( L"< ", 2 );
-        }
+        vgui::surface()->DrawSetTextColor( m_colTextColor );
+
+        vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nTextW - 2 * nScrollerSize, nTextY );
+        vgui::surface()->DrawPrintText( L"< ", 2 );
+
         vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nTextW - nScrollerSize, nTextY );
         vgui::surface()->DrawPrintText( strOption.String(), strOption.Length() );
-        if ( state != ButtonStates::Out )
-        {
-            vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nScrollerSize, nTextY );
-            vgui::surface()->DrawPrintText( L" >", 2 );
-        }
+
+        vgui::surface()->DrawSetTextPos( m_flWidth - m_flTextOffsetX - nScrollerSize, nTextY );
+        vgui::surface()->DrawPrintText( L" >", 2 );
     }
 
     void ClearOptions()
@@ -515,6 +568,7 @@ private:
 
     bool m_bSignOnly = false;
     int m_nSelectedItem = 0;
+    int m_nMouseArrow = 0;
     CUtlVector< GamepadUIOption > m_Options;
 
 };
@@ -535,6 +589,9 @@ public:
 
     void OnKeyCodePressed( vgui::KeyCode code )
     {
+        // A stale mouse arrow must not affect keyboard/gamepad input.
+        m_nMouseArrow = 0;
+
         ButtonCode_t buttonCode = GetBaseButtonCode( code );
         switch ( buttonCode )
         {
@@ -586,6 +643,8 @@ public:
     {
         BaseClass::Paint();
 
+        const int nBlockRight = m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth;
+
         if ( nTextPrecision >= 0 )
         {
             wchar_t szValue[ 256 ];
@@ -593,8 +652,23 @@ public:
 
             int w, h;
             vgui::surface()->GetTextSize( m_hTextFont, szValue, w, h );
-            vgui::surface()->DrawSetTextPos( m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth - w, m_flHeight / 2 - h / 2 );
+
+            const int nScrollerSize = vgui::surface()->GetCharacterWidth( m_hTextFont, L'<' ) + vgui::surface()->GetCharacterWidth( m_hTextFont, L' ' );
+            const int nTextX = nBlockRight - nScrollerSize - w;
+            const int nTextY = m_flHeight / 2 - h / 2;
+
+            // Always draw the arrows: a touch screen has no hover state to reveal them.
+            vgui::surface()->DrawSetTextFont( m_hTextFont );
+            vgui::surface()->DrawSetTextColor( m_colTextColor );
+
+            vgui::surface()->DrawSetTextPos( nTextX - nScrollerSize, nTextY );
+            vgui::surface()->DrawPrintText( L"< ", 2 );
+
+            vgui::surface()->DrawSetTextPos( nTextX, nTextY );
             vgui::surface()->DrawPrintText( szValue, V_wcslen( szValue ) );
+
+            vgui::surface()->DrawSetTextPos( nBlockRight - nScrollerSize, nTextY );
+            vgui::surface()->DrawPrintText( L" >", 2 );
         }
 
         vgui::surface()->DrawSetColor( m_colSliderBacking );
@@ -604,6 +678,44 @@ public:
 
         vgui::surface()->DrawSetColor( m_colSliderFill );
         vgui::surface()->DrawFilledRect( m_flWidth - m_flTextOffsetX - m_flSliderWidth, m_flHeight / 2 - m_flSliderHeight / 2, m_flWidth - m_flTextOffsetX - flFill, m_flHeight / 2 + m_flSliderHeight / 2 );
+    }
+
+    void OnMousePressed( vgui::MouseCode code ) OVERRIDE
+    {
+        m_nMouseArrow = 0;
+
+        if ( code == MOUSE_LEFT && IsEnabled() && nTextPrecision >= 0 )
+        {
+            int x, y;
+            vgui::input()->GetCursorPos( x, y );
+            ScreenToLocal( x, y );
+
+            wchar_t szValue[ 256 ];
+            V_snwprintf( szValue, sizeof( szValue ), L"%.*f", nTextPrecision, m_flValue );
+
+            int nTextW, nTextH;
+            vgui::surface()->GetTextSize( m_hTextFont, szValue, nTextW, nTextH );
+
+            const int nBlockRight = m_flWidth - 2 * m_flTextOffsetX - m_flSliderWidth;
+            m_nMouseArrow = HitTestOptionArrows( m_hTextFont, nTextW, nBlockRight, x );
+        }
+
+        BaseClass::OnMousePressed( code );
+    }
+
+    void FireActionSignal() OVERRIDE
+    {
+        const int nArrow = m_nMouseArrow;
+        m_nMouseArrow = 0;
+
+        BaseClass::FireActionSignal();
+
+        if ( nArrow == 0 )
+            return;
+
+        m_flValue = Clamp( m_flValue + ( nArrow > 0 ? m_flStep : -m_flStep ), m_flMin, m_flMax );
+        if ( m_bInstantApply )
+            UpdateConVar();
     }
 
     void SetToDefault() OVERRIDE
@@ -629,6 +741,7 @@ private:
     float m_flStep = 0.1f;
 
     int nTextPrecision = -1;
+    int m_nMouseArrow = 0;
 
     GAMEPADUI_BUTTON_ANIMATED_PROPERTY( Color, m_colSliderBacking, "Slider.Backing", "255 255 255 22", SchemeValueTypes::Color );
     GAMEPADUI_BUTTON_ANIMATED_PROPERTY( Color, m_colSliderFill, "Slider.Fill", "255 255 255 255", SchemeValueTypes::Color );
@@ -1441,20 +1554,6 @@ void GamepadUIOptionsPanel::OnCommand( char const* pCommand )
         if ( m_nTouchTab >= 0 && m_nTouchTab < m_nTabCount )
             SetActiveTab( m_nTouchTab );
     }
-    else if ( !V_strcmp( pCommand, "touch_customize" ) )
-    {
-        Close();
-        GamepadUI::GetInstance().GetEngineClient()->ClientCmd_Unrestricted(
-            "gameui_hide\ntouch_enable 1\ntouch_draw 1\ntouch_enableedit\n" );
-    }
-    else if ( !V_strcmp( pCommand, "touch_resetlayout" ) )
-    {
-        new GamepadUIGenericConfirmationPanel( this, "TouchResetConfirm", "Reset touch layout",
-            "This will restore the default touch button layout. Continue?",
-            [](){
-                GamepadUI::GetInstance().GetEngineClient()->ClientCmd_Unrestricted( "touch_loaddefaults\n" );
-            }, false, true );
-    }
     else if ( !V_strcmp( pCommand, "open_techcredits" ) )
     {
         GamepadUIString title = "#GameUI_ThirdPartyTechCredits";
@@ -1859,15 +1958,6 @@ static void AddTouchSlider( KeyValues* pItems, const char* pszKey, const char* p
         pItem->SetString( "depends_on", pszDependsOn );
 }
 
-static void AddTouchButton( KeyValues* pItems, const char* pszKey, const char* pszText, const char* pszCommand, const char* pszDescription )
-{
-    KeyValues* pItem = pItems->FindKey( pszKey, true );
-    pItem->SetString( "text", pszText );
-    pItem->SetString( "type", "button" );
-    pItem->SetString( "command", pszCommand );
-    pItem->SetString( "description", pszDescription );
-}
-
 void GamepadUIOptionsPanel::LoadTabItems( KeyValues* pTabData, int nTab )
 {
     if ( !V_strcmp( pTabData->GetString( "items_from" ), "keyboard" ) )
@@ -2187,10 +2277,6 @@ KeyValues* GamepadUIOptionsPanel::BuildTouchTabData()
     AddTouchSlider( pItems, "TouchSensitivity", "Touch sensitivity", "touch_sensitivity", 0.1f, 6.0f, 0.1f, 2 );
     AddTouchSlider( pItems, "TouchYaw", "Touch yaw sensitivity", "touch_yaw", 50.0f, 300.0f, 5.0f, 0 );
     AddTouchSlider( pItems, "TouchPitch", "Touch pitch sensitivity", "touch_pitch", 50.0f, 300.0f, 5.0f, 0 );
-
-    AddTouchHeader( pItems, "TouchLayoutHeader", "Layout" );
-    AddTouchButton( pItems, "TouchCustomizeLayout", "Customize touch layout", "touch_customize", "Open the touch layout editor. The game UI is hidden while editing." );
-    AddTouchButton( pItems, "TouchResetLayout", "Reset touch layout", "touch_resetlayout", "Restore the default touch button layout." );
 
     return pTab;
 }
