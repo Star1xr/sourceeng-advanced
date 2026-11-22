@@ -233,7 +233,12 @@ Logger::Logger(const overlay_params* in_params)
     m_logging_on(false),
     m_values_valid(false)
 {
-  if(output_folder.empty()) output_folder = std::getenv("HOME");
+  if(output_folder.empty()) {
+    // Port: HOME is not set on Android, and assigning getenv()'s NULL to a
+    // std::string is strlen(NULL) -> SIGSEGV on the first overlay frame.
+    const char* home = std::getenv("HOME");
+    output_folder = home ? home : get_data_dir();
+  }
   m_log_end = Clock::now() - std::chrono::seconds(15);
   SPDLOG_DEBUG("Logger constructed!");
 }
