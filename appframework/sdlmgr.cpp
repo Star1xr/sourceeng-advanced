@@ -29,7 +29,6 @@
 #include <unistd.h>
 #include <limits>
 #include <jni.h>
-#include <sys/system_properties.h>
 #endif
 
 // NOTE: This has to be the last file included! (turned off below, since this is included like a header)
@@ -1314,14 +1313,7 @@ static int MangoHud_GetAndroidStats( MangoHudAndroidRaw *out, int queryHeadroom 
 	out->current_now = out->charge_counter = std::numeric_limits<int>::min();
 	out->thermal_headroom = std::numeric_limits<float>::quiet_NaN();
 
-	static int s_apiLevel = 0;
-	if ( !s_apiLevel )
-	{
-		char value[PROP_VALUE_MAX] = { 0 };
-		if ( __system_property_get( "ro.build.version.sdk", value ) > 0 )
-			s_apiLevel = atoi( value );
-	}
-	out->api_level = s_apiLevel;
+	out->api_level = 0;
 
 	JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
 	if ( !env )
@@ -1334,6 +1326,19 @@ static int MangoHud_GetAndroidStats( MangoHudAndroidRaw *out, int queryHeadroom 
 		env->ExceptionClear();
 		return 0;
 	}
+
+	// Build.VERSION.SDK_INT (read once). Not via __system_property_get: the
+	// arm64 NDK libc stub doesn't export it.
+	static int s_apiLevel = 0;
+	if ( !s_apiLevel )
+	{
+		jclass cVersion = env->FindClass( "android/os/Build$VERSION" );
+		jfieldID fSdk = cVersion ? env->GetStaticFieldID( cVersion, "SDK_INT", "I" ) : NULL;
+		if ( MangoHud_JniOk( env ) && cVersion && fSdk )
+			s_apiLevel = (int)env->GetStaticIntField( cVersion, fSdk );
+		MangoHud_JniOk( env );
+	}
+	out->api_level = s_apiLevel;
 
 	bool ok = false;
 	jobject activity = (jobject)SDL_AndroidGetActivity();
