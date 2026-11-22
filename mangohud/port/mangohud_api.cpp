@@ -4,6 +4,8 @@
 #include <cstring>
 #include <string>
 
+#include <unistd.h>
+
 #include <glad/glad.h>
 
 #include "gl/gl_hud.h"
@@ -19,6 +21,32 @@ MangoHudApi g_api = MANGOHUD_API_GL;
 void *(*g_get_proc_address)(const char *) = nullptr;
 bool g_initialized = false;
 bool g_context_created = false;
+
+/* True if the user has a MangoHud.conf we would pick up (same places as
+ * enumerate_config_files() in config.cpp), or points MANGOHUD_CONFIGFILE at one. */
+bool HasUserConfigFile(const char *config_dir)
+{
+	if (getenv("MANGOHUD_CONFIGFILE"))
+		return true;
+
+	if (!config_dir || !config_dir[0])
+		return false;
+
+	static const char *names[] = {
+		"/MangoHud.conf",
+		"/mangohud.conf",
+		"/MangoHud/MangoHud.conf",
+	};
+
+	for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++)
+	{
+		std::string path = std::string(config_dir) + names[i];
+		if (access(path.c_str(), R_OK) == 0)
+			return true;
+	}
+
+	return false;
+}
 
 /* MangoHud's renderer creates GL objects, so the context has to exist before
  * imgui_set_context() runs. The engine's SDL manager calls Init() during
@@ -67,7 +95,12 @@ extern "C" int MangoHud_Init(const MangoHudDesc *desc)
 		g_mangohud_data_dir_override = desc->config_dir;
 	}
 
-	if (desc->default_config && desc->default_config[0] && !getenv("MANGOHUD_CONFIG"))
+	/* Setting MANGOHUD_CONFIG makes parse_overlay_config() skip MangoHud.conf
+	 * entirely (it only reads the file when the variable is unset or contains
+	 * read_cfg). So the default config is applied only when the user has no
+	 * config file; otherwise their file must be read. */
+	if (desc->default_config && desc->default_config[0] && !getenv("MANGOHUD_CONFIG")
+		&& !HasUserConfigFile(desc->config_dir))
 		setenv("MANGOHUD_CONFIG", desc->default_config, 1);
 
 	g_initialized = true;
