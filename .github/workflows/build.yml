@@ -221,10 +221,12 @@ jobs:
           unzip -l out/srceng-debug.apk | grep -E "lib/|classes.dex|AndroidManifest" | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
           ls -l out/srceng-debug.apk
 
+      # archive: false uploads the APK itself instead of a zip around it (single
+      # file only; the artifact is named after the file, so no `name` here).
       - name: Upload APK
         if: steps.tok.outputs.have == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: srceng-debug-apk
           path: launcher/out/srceng-debug.apk
+          archive: false
           if-no-files-found: error
