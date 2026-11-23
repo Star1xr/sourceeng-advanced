@@ -97,30 +97,12 @@ jobs:
           path: .ccache
           key: ccache-${{ matrix.arch }}-${{ github.sha }}
 
-      # The repo is public, so artifacts are downloadable by any signed-in GitHub
-      # user. Encrypt the libraries (key = LAUNCHER_TOKEN, which only this repo's
-      # jobs can read) before uploading; package-apk decrypts them. Without the
-      # secret (e.g. fork PRs) nothing is uploaded, and no APK is built anyway.
-      - name: Encrypt and upload APK libraries
-        env:
-          LAUNCHER_TOKEN: ${{ secrets.LAUNCHER_TOKEN }}
-        run: |
-          set -eu
-          if [ -z "$LAUNCHER_TOKEN" ]; then
-            echo "::warning::LAUNCHER_TOKEN is not set, libraries are not uploaded."
-            exit 0
-          fi
-          mkdir -p enc
-          tar -C apklibs -czf - . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:LAUNCHER_TOKEN -out "enc/apklibs-${{ matrix.arch }}.tar.gz.enc"
-          ls -l enc
-
-      - name: Upload encrypted APK libraries
+      - name: Upload APK libraries
         uses: actions/upload-artifact@v4
         with:
           name: apklibs-${{ matrix.arch }}
-          path: enc
-          if-no-files-found: ignore
-          retention-days: 1
+          path: apklibs
+          if-no-files-found: error
 
   # Builds the launcher (Star1xr/srcengoveye, private, Gradle) with the native
   # libraries from the build job(s) into one debug-signed APK. Runs even if one
@@ -162,24 +144,13 @@ jobs:
           token: ${{ secrets.LAUNCHER_TOKEN }}
           path: launcher
 
-      - name: Download encrypted native libraries
+      - name: Download native libraries
         if: steps.tok.outputs.have == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: apklibs-*
-          path: enc
+          path: launcher/libs
           merge-multiple: true
-
-      - name: Decrypt native libraries
-        if: steps.tok.outputs.have == 'true'
-        run: |
-          set -eu
-          mkdir -p launcher/libs
-          for f in enc/*.enc; do
-            [ -f "$f" ] || { echo "::error::no encrypted libraries were uploaded"; exit 1; }
-            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:LAUNCHER_TOKEN -in "$f" | tar -xz -C launcher/libs
-          done
-          ls launcher/libs
 
       # Every ABI that is packaged must have the launcher entry point and SDL2,
       # otherwise the app fails at startup with UnsatisfiedLinkError.
@@ -243,24 +214,12 @@ jobs:
           unzip -l out/srceng-debug.apk | grep -E "lib/|classes.*dex|AndroidManifest|extras_dir" | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
           ls -l out/srceng-debug.apk
 
-      # The repo is public, so a workflow artifact would be downloadable by any
-      # signed-in GitHub user. Publish the APK as a release of the PRIVATE
-      # launcher repo instead: only people with access to it can see or download
-      # it (GitHub -> Star1xr/srcengoveye -> Releases -> latest-apk).
-      # LAUNCHER_TOKEN therefore needs Contents: Read and write on that repo.
-      - name: Publish APK to the private launcher repo
+      # archive: false uploads the APK itself instead of a zip around it (single
+      # file only; the artifact is named after the file, so no `name` here).
+      - name: Upload APK
         if: steps.tok.outputs.have == 'true'
-        working-directory: launcher
-        env:
-          GH_TOKEN: ${{ secrets.LAUNCHER_TOKEN }}
-        run: |
-          set -eu
-          gh release delete latest-apk -R "$LAUNCHER_REPO" --cleanup-tag -y 2>/dev/null || true
-          if ! gh release create latest-apk out/srceng-debug.apk \
-                -R "$LAUNCHER_REPO" --target android-fixes --prerelease \
-                --title "Debug build ${GITHUB_SHA::7}" \
-                --notes "Engine commit ${GITHUB_SHA} (${GITHUB_REPOSITORY}, run ${GITHUB_RUN_ID})"; then
-            echo "::error::Could not create the release. Give LAUNCHER_TOKEN 'Contents: Read and write' on $LAUNCHER_REPO."
-            exit 1
-          fi
-          echo "APK: https://github.com/$LAUNCHER_REPO/releases/tag/latest-apk" >> "$GITHUB_STEP_SUMMARY"
+        uses: actions/upload-artifact@v7
+        with:
+          path: launcher/out/srceng-debug.apk
+          archive: false
+          if-no-files-found: error
