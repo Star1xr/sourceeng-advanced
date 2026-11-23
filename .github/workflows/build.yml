@@ -97,12 +97,29 @@ jobs:
           path: .ccache
           key: ccache-${{ matrix.arch }}-${{ github.sha }}
 
+      # The repo is public, so artifacts are downloadable by any signed-in GitHub
+      # user. Put the libraries in an AES-256 zip protected by the repository
+      # secret ZIP_PASSWORD before uploading (package-apk unzips it again).
+      - name: Zip APK libraries with a password
+        env:
+          ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
+        run: |
+          set -eu
+          if [ -z "$ZIP_PASSWORD" ]; then
+            echo "::warning::Secret ZIP_PASSWORD is not set, the libraries are not uploaded."
+            exit 0
+          fi
+          command -v 7z >/dev/null || { sudo apt-get update -qq; sudo apt-get install -y -qq --no-install-recommends p7zip-full; }
+          mkdir -p enc
+          (cd apklibs && 7z a -tzip -mem=AES256 -p"$ZIP_PASSWORD" "../enc/apklibs-${{ matrix.arch }}.zip" . > /dev/null)
+          ls -l enc
+
       - name: Upload APK libraries
         uses: actions/upload-artifact@v4
         with:
           name: apklibs-${{ matrix.arch }}
-          path: apklibs
-          if-no-files-found: error
+          path: enc
+          if-no-files-found: ignore
 
   # Builds the launcher (Star1xr/srcengoveye, private, Gradle) with the native
   # libraries from the build job(s) into one debug-signed APK. Runs even if one
@@ -116,6 +133,7 @@ jobs:
     env:
       LAUNCHER_REPO: Star1xr/srcengoveye
       LAUNCHER_TOKEN: ${{ secrets.LAUNCHER_TOKEN }}
+      ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       SDK_CMDTOOLS: commandlinetools-linux-11076708_latest
@@ -128,8 +146,8 @@ jobs:
       - name: Check launcher access token
         id: tok
         run: |
-          if [ -z "$LAUNCHER_TOKEN" ]; then
-            echo "::warning::Secret LAUNCHER_TOKEN is not set, skipping the APK. Add a token with read access to $LAUNCHER_REPO."
+          if [ -z "$LAUNCHER_TOKEN" ] || [ -z "$ZIP_PASSWORD" ]; then
+            echo "::warning::Secret LAUNCHER_TOKEN (read access to $LAUNCHER_REPO) and ZIP_PASSWORD must both be set, skipping the APK."
             echo "have=false" >> "$GITHUB_OUTPUT"
           else
             echo "have=true" >> "$GITHUB_OUTPUT"
@@ -149,8 +167,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: apklibs-*
-          path: launcher/libs
+          path: enc
           merge-multiple: true
+
+      - name: Unzip native libraries
+        if: steps.tok.outputs.have == 'true'
+        run: |
+          set -eu
+          command -v 7z >/dev/null || { sudo apt-get update -qq; sudo apt-get install -y -qq --no-install-recommends p7zip-full; }
+          mkdir -p launcher/libs
+          for f in enc/*.zip; do
+            [ -f "$f" ] || { echo "::error::no library archives were uploaded"; exit 1; }
+            7z x -y -p"$ZIP_PASSWORD" -olauncher/libs "$f" > /dev/null
+          done
+          ls launcher/libs
 
       # Every ABI that is packaged must have the launcher entry point and SDL2,
       # otherwise the app fails at startup with UnsatisfiedLinkError.
@@ -214,12 +244,25 @@ jobs:
           unzip -l out/srceng-debug.apk | grep -E "lib/|classes.*dex|AndroidManifest|extras_dir" | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
           ls -l out/srceng-debug.apk
 
-      # archive: false uploads the APK itself instead of a zip around it (single
-      # file only; the artifact is named after the file, so no `name` here).
-      - name: Upload APK
+      # APK + native libraries in one AES-256 zip protected by ZIP_PASSWORD, so
+      # only whoever knows the password can open what the artifact contains.
+      # archive: false uploads the zip itself (single file only; the artifact is
+      # named after the file, so no `name` here).
+      - name: Zip APK and libraries with a password
+        if: steps.tok.outputs.have == 'true'
+        working-directory: launcher
+        run: |
+          set -eu
+          mkdir -p private
+          cp out/srceng-debug.apk private/
+          cp -r libs private/libs
+          (cd private && 7z a -tzip -mem=AES256 -p"$ZIP_PASSWORD" ../out/srceng-private.zip . > /dev/null)
+          ls -l out/srceng-private.zip
+
+      - name: Upload APK zip
         if: steps.tok.outputs.have == 'true'
         uses: actions/upload-artifact@v7
         with:
-          path: launcher/out/srceng-debug.apk
+          path: launcher/out/srceng-private.zip
           archive: false
           if-no-files-found: error
