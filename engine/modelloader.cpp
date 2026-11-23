@@ -1042,9 +1042,13 @@ bool Map_CheckForHDR( model_t *pModel, const char *pLoadName )
 		bHasHDR = false;
 	}
 	
+	// mat_hdr_level 0 = no HDR, 1 = LDR + bloom, 2 = full HDR. Only full HDR
+	// should read the HDR lighting lumps; otherwise we would load HDR lightmaps
+	// and then run them through the LDR pipeline.
 	bool bEnableHDR = ( IsX360() && bHasHDR ) ||
 		( bHasHDR &&
-		( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 90 ) );
+		( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 90 ) &&
+		( mat_hdr_level.GetInt() >= 2 ) );
 	
 	EnableHDR( bEnableHDR );
 
