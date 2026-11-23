@@ -1639,7 +1639,6 @@ static float GetFogMaxDensity( fogparams_t *pFogParams )
 //-----------------------------------------------------------------------------
 static bool GetFogRadial( fogparams_t *pFogParams )
 {
-	( void )pFogParams;
 	if ( cl_leveloverview.GetFloat() > 0 )
 		return false;
 
@@ -1653,12 +1652,10 @@ static bool GetFogRadial( fogparams_t *pFogParams )
 			return fog_radial.GetBool();
 	}
 
-	// The world (lightmappedgeneric) shader shipped by the game has no radial
-	// fog path, so honoring a map's radial flag would leave the world using
-	// linear fog while water/decals use radial fog. Keep it off unless the user
-	// explicitly opts in with fog_override + fog_radial until that shader is
-	// rebuilt.
-	return false;
+	if ( !pFogParams )
+		return false;
+
+	return pFogParams->radial;
 }
 
 
