@@ -417,7 +417,7 @@ public:
 		m_pShaderDetail = new ComboBox( this, "ShaderDetail", 6, false );
 		m_pShaderDetail->AddItem("#gameui_low", NULL);
 		m_pShaderDetail->AddItem("#gameui_high", NULL);
-		m_pShaderDetail->AddItem("#gameui_veryhigh", NULL);
+		m_pShaderDetail->AddItem("#gameui_ultra", NULL);
 
 		m_pColorCorrection = new ComboBox( this, "ColorCorrection", 2, false );
 		m_pColorCorrection->AddItem("#gameui_disabled", NULL);
