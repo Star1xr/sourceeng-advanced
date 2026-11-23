@@ -1189,6 +1189,8 @@ public:
 	virtual void				FogEnd( float fEnd ) = 0;
 	virtual void				SetFogZ( float fogZ ) = 0;
 	virtual MaterialFogMode_t	GetFogMode( void ) = 0;
+	virtual void				FogRadial( bool bRadial ) = 0;
+	virtual bool				GetFogRadial( void ) = 0;
 
 	virtual void				FogColor3f( float r, float g, float b ) = 0;
 	virtual void				FogColor3fv( float const* rgb ) = 0;

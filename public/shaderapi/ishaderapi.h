@@ -359,6 +359,8 @@ public:
 	virtual void SceneFogColor3ub( unsigned char r, unsigned char g, unsigned char b ) = 0;
 	virtual void GetSceneFogColor( unsigned char *rgb ) = 0;
 	virtual void SceneFogMode( MaterialFogMode_t fogMode ) = 0;
+	virtual void SceneFogRadial( bool bRadial ) = 0;
+	virtual bool GetSceneFogRadial( void ) = 0;
 
 	// Can we download textures?
 	virtual bool CanDownloadTextures() const = 0;

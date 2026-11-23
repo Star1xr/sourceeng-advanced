@@ -289,6 +289,9 @@ public:
 
 	virtual void GetDX9LightState( LightState_t *state ) const = 0;
 	virtual int GetPixelFogCombo( ) = 0; //0 is either range fog, or no fog simulated with rigged range fog values. 1 is height fog
+	// Same as GetPixelFogCombo, but returns PIXEL_FOG_TYPE_RANGE_RADIAL (2) when
+	// radial fog is active and the shader was built with radial fog support.
+	virtual int GetPixelFogCombo1( bool bSupportsRadial ) = 0;
 
 	virtual void BindStandardVertexTexture( VertexTextureSampler_t sampler, StandardTextureId_t id ) = 0;
 

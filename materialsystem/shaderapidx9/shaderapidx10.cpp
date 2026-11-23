@@ -1119,6 +1119,20 @@ int CShaderAPIDx10::GetPixelFogCombo( )
 	return 0; //FIXME
 }
 
+void CShaderAPIDx10::SceneFogRadial( bool bRadial )
+{
+}
+
+bool CShaderAPIDx10::GetSceneFogRadial( void )
+{
+	return false;
+}
+
+int CShaderAPIDx10::GetPixelFogCombo1( bool bSupportsRadial )
+{
+	return 0; //FIXME
+}
+
 void CShaderAPIDx10::FogColor3f( float r, float g, float b )
 {
 }

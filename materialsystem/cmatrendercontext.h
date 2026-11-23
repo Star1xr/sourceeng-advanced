@@ -398,6 +398,8 @@ public:
 
 	// Fog-related methods
 	void									FogMode( MaterialFogMode_t fogMode )								{ g_pShaderAPI->SceneFogMode( fogMode ); }
+	void									FogRadial( bool bRadial )											{ g_pShaderAPI->SceneFogRadial( bRadial ); }
+	bool									GetFogRadial( void )												{ return g_pShaderAPI->GetSceneFogRadial(); }
 	DELEGATE_TO_OBJECT_1V(					FogStart, float, g_pShaderAPI );
 	DELEGATE_TO_OBJECT_1V(					FogEnd, float, g_pShaderAPI );
 	DELEGATE_TO_OBJECT_1V(					SetFogZ, float, g_pShaderAPI );

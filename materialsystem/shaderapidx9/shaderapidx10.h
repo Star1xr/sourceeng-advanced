@@ -365,9 +365,12 @@ private:
 
 	virtual void SceneFogColor3ub( unsigned char r, unsigned char g, unsigned char b );
 	virtual void SceneFogMode( MaterialFogMode_t fogMode );
+	virtual void SceneFogRadial( bool bRadial );
+	virtual bool GetSceneFogRadial( void );
 	virtual void GetSceneFogColor( unsigned char *rgb );
 	virtual MaterialFogMode_t GetSceneFogMode( );
 	virtual int GetPixelFogCombo( );
+	virtual int GetPixelFogCombo1( bool bSupportsRadial );
 
 	void SetHeightClipZ( float z ); 
 	void SetHeightClipMode( enum MaterialHeightClipMode_t heightClipMode ); 

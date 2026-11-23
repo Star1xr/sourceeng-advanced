@@ -417,6 +417,7 @@ public:
 		m_pShaderDetail = new ComboBox( this, "ShaderDetail", 6, false );
 		m_pShaderDetail->AddItem("#gameui_low", NULL);
 		m_pShaderDetail->AddItem("#gameui_high", NULL);
+		m_pShaderDetail->AddItem("Very High", NULL);
 
 		m_pColorCorrection = new ComboBox( this, "ColorCorrection", 2, false );
 		m_pColorCorrection->AddItem("#gameui_disabled", NULL);
@@ -745,6 +746,7 @@ public:
 		}
 
 		ApplyChangesToConVar( "mat_reducefillrate", ( m_pShaderDetail->GetActiveItem() > 0 ) ? 0 : 1 );
+		ApplyChangesToConVar( "r_lightmap_bicubic", ( m_pShaderDetail->GetActiveItem() > 1 ) ? 1 : 0 );
 
 		switch ( m_pWaterDetail->GetActiveItem() )
 		{
@@ -826,7 +828,11 @@ public:
 			m_pShadowDetail->ActivateItem( 0 );
 		}
 
-		m_pShaderDetail->ActivateItem( mat_reducefillrate.GetBool() ? 0 : 1 );
+		ConVarRef r_lightmap_bicubic( "r_lightmap_bicubic" );
+		if ( r_lightmap_bicubic.GetBool() )
+			m_pShaderDetail->ActivateItem( 2 );
+		else
+			m_pShaderDetail->ActivateItem( mat_reducefillrate.GetBool() ? 0 : 1 );
 		m_pHDR->ActivateItem(clamp(mat_hdr_level.GetInt(), 0, 2));
 
 		switch (mat_forceaniso.GetInt())

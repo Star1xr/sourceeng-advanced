@@ -1014,6 +1014,17 @@ void CMatQueuedRenderContext::FogMode( MaterialFogMode_t fogMode )
 	m_queue.QueueCall( m_pHardwareContext, &IMatRenderContext::FogMode, fogMode );
 }
 
+void CMatQueuedRenderContext::FogRadial( bool bRadial )
+{
+	m_bFogRadial = bRadial;
+	m_queue.QueueCall( m_pHardwareContext, &IMatRenderContext::FogRadial, bRadial );
+}
+
+bool CMatQueuedRenderContext::GetFogRadial( void )
+{
+	return m_bFogRadial;
+}
+
 void CMatQueuedRenderContext::FogStart( float fStart )
 {
 	m_flFogStart = fStart;

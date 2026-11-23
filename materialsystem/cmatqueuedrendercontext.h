@@ -102,6 +102,7 @@ public:
 		m_WidthBackBuffer( 0 ), 
 		m_HeightBackBuffer( 0 ),
 		m_FogMode( MATERIAL_FOG_NONE ),
+		m_bFogRadial( false ),
 		m_flFogStart( 0 ),
 		m_flFogEnd( 0 ),
 		m_flFogZ( 0 ),
@@ -190,6 +191,8 @@ public:
 	DEFINE_QUEUED_CALL_1(					CullMode, MaterialCullMode_t, IMatRenderContext, m_pHardwareContext );
 
 	void									FogMode( MaterialFogMode_t fogMode );
+	void									FogRadial( bool bRadial );
+	bool									GetFogRadial( void );
 	void									FogStart( float fStart );
 	void									FogEnd( float fEnd );
 	void									SetFogZ( float fogZ );
@@ -613,6 +616,7 @@ private:
 	int m_WidthBackBuffer, m_HeightBackBuffer;
 	int m_nBoneCount;
 	MaterialFogMode_t m_FogMode;
+	bool m_bFogRadial;
 	float m_flFogStart;
 	float m_flFogEnd;
 	float m_flFogZ;

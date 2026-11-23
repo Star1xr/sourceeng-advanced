@@ -337,7 +337,7 @@ void Draw_Eyes_Refract_Internal( CBaseVSShader *pShader, IMaterialVar** params, 
 		vPackedConst6[3] = IS_PARAM_DEFINED( info.m_nParallaxStrength ) ? params[info.m_nParallaxStrength]->GetFloatValue() : kDefaultParallaxStrength;
 		pShaderAPI->SetPixelShaderConstant( 6, vPackedConst6, 1 );
 
-		float fPixelFogType = pShaderAPI->GetPixelFogCombo() == 1 ? 1 : 0;
+		float fPixelFogType = pShaderAPI->GetPixelFogCombo1( true ) == 1 ? 1 : 0;
 
 		// Controls for lerp-style paths through shader code
 		float vShaderControls[4] = { fPixelFogType, 0, 0, 0 };

@@ -139,6 +139,8 @@ static ConVar fog_maxdensityskybox( "fog_maxdensityskybox", "-1", FCVAR_CHEAT );
 static ConVar fog_colorskybox( "fog_colorskybox", "-1 -1 -1", FCVAR_CHEAT );
 static ConVar fog_enableskybox( "fog_enableskybox", "1", FCVAR_CHEAT );
 static ConVar fog_maxdensity( "fog_maxdensity", "-1", FCVAR_CHEAT );
+static ConVar fog_radial( "fog_radial", "-1", FCVAR_CHEAT );
+static ConVar fog_radialskybox( "fog_radialskybox", "-1", FCVAR_CHEAT );
 
 
 //-----------------------------------------------------------------------------
@@ -1633,6 +1635,31 @@ static float GetFogMaxDensity( fogparams_t *pFogParams )
 
 
 //-----------------------------------------------------------------------------
+// Purpose: Returns whether radial (distance-based) fog should be used.
+//-----------------------------------------------------------------------------
+static bool GetFogRadial( fogparams_t *pFogParams )
+{
+	if ( cl_leveloverview.GetFloat() > 0 )
+		return false;
+
+	// Ask the clientmode
+	if ( !g_pClientMode->ShouldDrawFog() )
+		return false;
+
+	if ( fog_override.GetInt() )
+	{
+		if ( fog_radial.GetInt() != -1 )
+			return fog_radial.GetBool();
+	}
+
+	if ( !pFogParams )
+		return false;
+
+	return pFogParams->radial;
+}
+
+
+//-----------------------------------------------------------------------------
 // Purpose: Returns the skybox fog color to use in rendering the current frame.
 //-----------------------------------------------------------------------------
 static void GetSkyboxFogColor( float *pColor )
@@ -1760,6 +1787,31 @@ static float GetSkyboxFogMaxDensity()
 	}
 	else
 		return local->m_skybox3d.fog.maxdensity;
+}
+
+
+static bool GetSkyboxFogRadial( void )
+{
+	C_BasePlayer *pbp = C_BasePlayer::GetLocalPlayer();
+	if ( !pbp )
+		return false;
+
+	CPlayerLocalData *local = &pbp->m_Local;
+
+	if ( cl_leveloverview.GetFloat() > 0 )
+		return false;
+
+	// Ask the clientmode
+	if ( !g_pClientMode->ShouldDrawFog() )
+		return false;
+
+	if ( fog_override.GetInt() )
+	{
+		if ( fog_radialskybox.GetInt() != -1 )
+			return fog_radialskybox.GetBool();
+	}
+
+	return local->m_skybox3d.fog.radial;
 }
 
 
@@ -3048,6 +3100,7 @@ bool CViewRender::DrawOneMonitor( ITexture *pRenderTarget, int cameraNum, C_Poin
 		pFogParams->end = pCameraEnt->GetFogEnd();
 		pFogParams->farz = pCameraEnt->GetFogEnd();
 		pFogParams->maxdensity = pCameraEnt->GetFogMaxDensity();
+		pFogParams->radial = pCameraEnt->GetFogRadial();
 
 		unsigned char r, g, b;
 		pCameraEnt->GetFogColor( r, g, b );
@@ -4552,6 +4605,7 @@ void CRendering3dView::EnableWorldFog( void )
 		float fogColor[3];
 		GetFogColor( pFogParams, fogColor );
 		pRenderContext->FogMode( MATERIAL_FOG_LINEAR );
+		pRenderContext->FogRadial( GetFogRadial( pFogParams ) );
 		pRenderContext->FogColor3fv( fogColor );
 		pRenderContext->FogStart( GetFogStart( pFogParams ) );
 		pRenderContext->FogEnd( GetFogEnd( pFogParams ) );
@@ -4659,6 +4713,7 @@ void CSkyboxView::Enable3dSkyboxFog( void )
 			scale = 1.0f / local->m_skybox3d.scale;
 		}
 		pRenderContext->FogMode( MATERIAL_FOG_LINEAR );
+		pRenderContext->FogRadial( GetSkyboxFogRadial() );
 		pRenderContext->FogColor3fv( fogColor );
 		pRenderContext->FogStart( GetSkyboxFogStart() * scale );
 		pRenderContext->FogEnd( GetSkyboxFogEnd() * scale );

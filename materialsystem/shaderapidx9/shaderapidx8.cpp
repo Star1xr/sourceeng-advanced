@@ -957,9 +957,12 @@ public:
 	void GetFogDistances( float *fStart, float *fEnd, float *fFogZ );
 
 	void SceneFogMode( MaterialFogMode_t fogMode );
+	void SceneFogRadial( bool bRadial );
+	bool GetSceneFogRadial( void );
 	MaterialFogMode_t GetSceneFogMode( );
 	MaterialFogMode_t GetPixelFogMode( );
 	int GetPixelFogCombo( );//0 is either range fog, or no fog simulated with rigged range fog values. 1 is height fog
+	int GetPixelFogCombo1( bool bSupportsRadial );
 	bool ShouldUsePixelFogForMode( MaterialFogMode_t fogMode );
 	void SceneFogColor3ub( unsigned char r, unsigned char g, unsigned char b );
 	void GetSceneFogColor( unsigned char *rgb );
@@ -1695,6 +1698,7 @@ private:
 	// fog
 	unsigned char m_SceneFogColor[3];
 	MaterialFogMode_t m_SceneFogMode;
+	bool m_bSceneFogRadial;
 
 	// Tone Mapping state ( w is gamma scale )
 	Vector4D m_ToneMappingScale;
@@ -1934,6 +1938,7 @@ CShaderAPIDx8::CShaderAPIDx8() :
 	m_SceneFogColor[1] = 0;
 	m_SceneFogColor[2] = 0;
 	m_SceneFogMode = MATERIAL_FOG_NONE;
+	m_bSceneFogRadial = false;
 
 	// We haven't yet detected whether we support CreateQuery or not yet.
 	memset(IntRenderingParameters,0,sizeof(IntRenderingParameters));
@@ -3427,6 +3432,7 @@ void CShaderAPIDx8::ResetRenderState( bool bFullReset )
 	m_SceneFogColor[1] = 0;
 	m_SceneFogColor[2] = 0;
 	m_SceneFogMode = MATERIAL_FOG_NONE;
+	m_bSceneFogRadial = false;
 
 	// This is state that isn't part of the snapshot per-se, because we
 	// don't need it when it's actually time to render. This just helps us
@@ -6021,6 +6027,30 @@ int CShaderAPIDx8::GetPixelFogCombo( void )
 		return m_SceneFogMode - 1; //PIXELFOGTYPE dynamic combos are shifted down one. MATERIAL_FOG_NONE is simulated by range fog with rigged parameters. Gets rid of a dynamic combo across the ps2x set
 	else	
 		return MATERIAL_FOG_NONE;
+}
+
+int CShaderAPIDx8::GetPixelFogCombo1( bool bSupportsRadial )
+{
+	// Radial fog is an alternative to linear range fog only. Height fog keeps
+	// using PIXEL_FOG_TYPE_HEIGHT.
+	if ( ( m_SceneFogMode == MATERIAL_FOG_LINEAR ) &&
+		 bSupportsRadial && m_bSceneFogRadial &&
+		 ShouldUsePixelFogForMode( m_SceneFogMode ) )
+	{
+		return 2; // PIXEL_FOG_TYPE_RANGE_RADIAL
+	}
+
+	return GetPixelFogCombo();
+}
+
+void CShaderAPIDx8::SceneFogRadial( bool bRadial )
+{
+	m_bSceneFogRadial = bRadial;
+}
+
+bool CShaderAPIDx8::GetSceneFogRadial( void )
+{
+	return m_bSceneFogRadial;
 }
 
 

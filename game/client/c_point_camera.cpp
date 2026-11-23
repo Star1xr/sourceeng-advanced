@@ -23,6 +23,7 @@ IMPLEMENT_CLIENTCLASS_DT( C_PointCamera, DT_PointCamera, CPointCamera )
 	RecvPropFloat( RECVINFO( m_flFogStart ) ), 
 	RecvPropFloat( RECVINFO( m_flFogEnd ) ), 
 	RecvPropFloat( RECVINFO( m_flFogMaxDensity ) ), 
+	RecvPropInt( RECVINFO( m_bFogRadial ) ),
 	RecvPropInt( RECVINFO( m_bActive ) ),
 	RecvPropInt( RECVINFO( m_bUseScreenAspectRatio ) ),
 END_RECV_TABLE()
@@ -39,6 +40,7 @@ C_PointCamera::C_PointCamera()
 {
 	m_bActive = false;
 	m_bFogEnable = false;
+	m_bFogRadial = false;
 
 	g_PointCameraList.Insert( this );
 }
@@ -88,6 +90,11 @@ float C_PointCamera::GetFogEnd()
 float C_PointCamera::GetFogMaxDensity()
 {
 	return m_flFogMaxDensity;
+}
+
+bool C_PointCamera::GetFogRadial()
+{
+	return m_bFogRadial;
 }
 
 bool C_PointCamera::IsActive()

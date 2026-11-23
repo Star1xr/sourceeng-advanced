@@ -2308,9 +2308,15 @@ int CModelRender::DrawModel(
 int	CModelRender::ComputeLOD( const ModelRenderInfo_t &info, studiohwdata_t *pStudioHWData )
 {
 	int lod = r_lod.GetInt();
+	// "High" model detail (r_rootlod 0) must always show the highest detail
+	// version of a model, never swapping to a lower LOD based on distance.
+	if ( ( lod == -1 ) && ( r_rootlod.GetInt() == 0 ) )
+	{
+		lod = 0;
+	}
 	// FIXME!!!  This calc should be in studiorender, not here!!!!!  But since the bone setup
 	// is done here, and we need the bone mask, we'll do it here for now.
-	if ( lod == -1 )
+	else if ( lod == -1 )
 	{
 		CMatRenderContextPtr pRenderContext( materials );
 		float screenSize = pRenderContext->ComputePixelWidthOfSphere(info.pRenderable->GetRenderOrigin(), 0.5f );

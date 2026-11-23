@@ -161,6 +161,17 @@ public:
 		return MATERIAL_FOG_NONE;
 	}
 
+	void FogRadial( bool )
+	{
+		AssertMsg( 0, "CMatNullRenderContext only provides base features, not a stub (right now)" );
+	}
+
+	bool GetFogRadial()
+	{
+		AssertMsg( 0, "CMatNullRenderContext only provides base features, not a stub (right now)" );
+		return false;
+	}
+
 	int	GetCurrentNumBones( ) const
 	{
 		AssertMsg( 0, "CMatNullRenderContext only provides base features, not a stub (right now)" );

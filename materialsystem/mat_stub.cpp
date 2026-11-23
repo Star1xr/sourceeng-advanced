@@ -1308,6 +1308,13 @@ public:
 	{
 		return MATERIAL_FOG_NONE;
 	}
+	virtual void				FogRadial( bool bRadial )
+	{
+	}
+	virtual bool				GetFogRadial( void )
+	{
+		return false;
+	}
 	virtual void				FogStart( float fStart )
 	{
 	}

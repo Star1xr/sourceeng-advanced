@@ -1063,7 +1063,9 @@ bool CShaderDeviceMgrDx8::ComputeCapsFromD3D( HardwareCaps_t *pCaps, int nAdapte
 		pCaps->m_SupportsSRGB;
 
 	// Do we have everything necessary to run with float HDR?
-	bool bSupportsFloatHDR = pCaps->m_SupportsShaderModel_3_0 &&
+	// OpenGL/GLES can use fp16 render targets even though the legacy GL path
+	// forces SM3.0 off, so don't let that requirement block float HDR there.
+	bool bSupportsFloatHDR = ( pCaps->m_SupportsShaderModel_3_0 || IsOpenGL() ) &&
 		//		(caps.Caps3 & D3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD) &&
 		//		(caps.PrimitiveMiscCaps & D3DPMISCCAPS_SEPARATEALPHABLEND) &&
 		bSupportsFloat16Textures &&
@@ -1078,17 +1080,24 @@ bool CShaderDeviceMgrDx8::ComputeCapsFromD3D( HardwareCaps_t *pCaps, int nAdapte
 		if ( bSupportsIntegerHDR )
 			pCaps->m_MaxHDRType = HDR_TYPE_INTEGER;
 
-	if ( bSupportsFloatHDR  && ( mat_hdr_level.GetInt() == 3 ) )
-	{
-		pCaps->m_HDRType = HDR_TYPE_FLOAT;
-	}
-	else if ( bSupportsIntegerHDR )
+	// Prefer integer (RGBE) HDR because it is cheaper, but fall back to fp16
+	// when the device lacks 16-bit normalized textures (common on GLES).
+	if ( bSupportsIntegerHDR )
 	{
 		pCaps->m_HDRType = HDR_TYPE_INTEGER;
+	}
+	else if ( bSupportsFloatHDR )
+	{
+		pCaps->m_HDRType = HDR_TYPE_FLOAT;
 	}
 	else
 	{
 		pCaps->m_HDRType = HDR_TYPE_NONE;
+	}
+
+	if ( bSupportsFloatHDR && ( mat_hdr_level.GetInt() == 3 ) )
+	{
+		pCaps->m_HDRType = HDR_TYPE_FLOAT;
 	}
 
 	pCaps->m_bColorOnSecondStream = caps.MaxStreams > 1;

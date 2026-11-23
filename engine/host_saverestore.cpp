@@ -1636,9 +1636,14 @@ int CSaveRestore::LookupRestoreSpotSaveIndex( RestoreLookupTable *table, int sav
 void CSaveRestore::ReapplyDecal( bool adjacent, RestoreLookupTable *table, decallist_t *entry )
 {
 	int flags = entry->flags;
+	// NOTE: We used to tag decals reapplied across a transition with
+	// FDECAL_DONTSAVE. DecalListCreate() skips those decals, so the next
+	// transition (e.g. backtracking to the previous map) would silently drop
+	// them. Reapplied decals belong to the new map's decal pool now and must
+	// be saved again so they survive chained transitions.
 	if ( adjacent )
 	{
-		flags |= FDECAL_DONTSAVE;
+		flags &= ~FDECAL_DONTSAVE;
 	}
 
 	// unlock sting tables to allow changes, helps to find unwanted changes (bebug build only)

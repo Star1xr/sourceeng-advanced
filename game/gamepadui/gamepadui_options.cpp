@@ -35,6 +35,7 @@ void OnResolutionsNeedUpdate( IConVar *var, const char *pOldValue, float flOldVa
 
 ConVar _gamepadui_water_detail( "_gamepadui_water_detail", "0" );
 ConVar _gamepadui_shadow_detail( "_gamepadui_shadow_detail", "0" );
+ConVar _gamepadui_shader_detail( "_gamepadui_shader_detail", "1" );
 ConVar _gamepadui_antialiasing( "_gamepadui_antialiasing", "0" );
 ConVar _gamepadui_aspectratio( "_gamepadui_aspectratio", "0", FCVAR_NONE, "", OnResolutionsNeedUpdate );
 ConVar _gamepadui_displaymode( "_gamepadui_displaymode", "0", FCVAR_NONE, "", OnResolutionsNeedUpdate );
@@ -1015,6 +1016,18 @@ int GetCurrentShadowDetail()
     return 0;
 }
 
+int GetCurrentShaderDetail()
+{
+    ConVarRef r_lightmap_bicubic( "r_lightmap_bicubic" );
+    ConVarRef mat_reducefillrate( "mat_reducefillrate" );
+
+    // Very High: full shader detail plus bicubic lightmap filtering.
+    if ( !mat_reducefillrate.GetBool() && r_lightmap_bicubic.GetBool() )
+        return 2;
+
+    return mat_reducefillrate.GetBool() ? 0 : 1;
+}
+
 int GetCurrentAntialiasing()
 {
     ConVarRef mat_antialias( "mat_antialias" );
@@ -1154,6 +1167,21 @@ void FlushPendingShadowDetail()
 
     if ( r_flashlightdepthtexture.GetBool() != bFlashlightDepthTexture )
         r_flashlightdepthtexture.SetValue( bFlashlightDepthTexture );
+}
+
+void FlushPendingShaderDetail()
+{
+    ConVarRef mat_reducefillrate( "mat_reducefillrate" );
+    ConVarRef r_lightmap_bicubic( "r_lightmap_bicubic" );
+
+    bool bReduceFillRate = _gamepadui_shader_detail.GetInt() < 1;
+    bool bBicubic = _gamepadui_shader_detail.GetInt() > 1;
+
+    if ( mat_reducefillrate.GetBool() != bReduceFillRate )
+        mat_reducefillrate.SetValue( bReduceFillRate );
+
+    if ( r_lightmap_bicubic.GetBool() != bBicubic )
+        r_lightmap_bicubic.SetValue( bBicubic );
 }
 
 void FlushPendingResolution()
@@ -1299,6 +1327,7 @@ void UpdateHelperConvars()
 {
     _gamepadui_water_detail.SetValue( GetCurrentWaterDetail() );
     _gamepadui_shadow_detail.SetValue( GetCurrentShadowDetail() );
+    _gamepadui_shader_detail.SetValue( GetCurrentShaderDetail() );
     _gamepadui_antialiasing.SetValue( GetCurrentAntialiasing() );
     _gamepadui_aspectratio.SetValue( GetCurrentAspectRatio() );
     _gamepadui_displaymode.SetValue( GetCurrentDisplayMode() );
@@ -1314,6 +1343,7 @@ void FlushHelperConVars()
 {
     FlushPendingWaterDetail();
     FlushPendingShadowDetail();
+    FlushPendingShaderDetail();
     FlushPendingAntialiasing();
     FlushPendingResolution();
     FlushPendingSoundQuality();
