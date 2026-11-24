@@ -212,6 +212,121 @@ VideoSystemFeature_t CBinkVideoSubSystem::GetSupportedFileExtensionFeatures( int
 }
 
 
+
+// ===========================================================================
+// Minimal self-contained audio player for fullscreen movies: decodes the audio
+// stream with ffmpeg inside the SDL audio callback of its own SDL device.
+// ===========================================================================
+struct BinkFSAudio
+{
+	AVFormatContext *fmt = nullptr;
+	AVCodecContext *ctx = nullptr;
+	AVPacket *pkt = nullptr;
+	AVFrame *frm = nullptr;
+	int stream = -1;
+	SDL_AudioDeviceID dev = 0;
+	int16_t *buf = nullptr;
+	int bufCap = 0, bufLen = 0, bufPos = 0;	// in stereo frames
+	bool eof = false;
+
+	static float Sample( const AVFrame *f, int c, int i )
+	{
+		int ch = f->ch_layout.nb_channels;
+		switch ( f->format )
+		{
+		case AV_SAMPLE_FMT_FLTP: return ((float*)f->extended_data[c])[i];
+		case AV_SAMPLE_FMT_FLT:  return ((float*)f->data[0])[i*ch+c];
+		case AV_SAMPLE_FMT_S16P: return ((int16_t*)f->extended_data[c])[i] / 32768.0f;
+		case AV_SAMPLE_FMT_S16:  return ((int16_t*)f->data[0])[i*ch+c] / 32768.0f;
+		}
+		return 0.0f;
+	}
+
+	bool Decode()
+	{
+		while ( !eof )
+		{
+			int r = avcodec_receive_frame( ctx, frm );
+			if ( r == 0 )
+			{
+				int n = frm->nb_samples, ch = frm->ch_layout.nb_channels;
+				if ( n > bufCap ) { buf = (int16_t*)realloc( buf, n * 4 ); bufCap = n; }
+				for ( int i = 0; i < n; i++ )
+					for ( int c = 0; c < 2; c++ )
+					{
+						float v = Sample( frm, ( c < ch ) ? c : 0, i );
+						v = v > 1.0f ? 1.0f : ( v < -1.0f ? -1.0f : v );
+						buf[i*2+c] = (int16_t)( v * 32767.0f );
+					}
+				bufLen = n; bufPos = 0;
+				av_frame_unref( frm );
+				return true;
+			}
+			if ( r != AVERROR(EAGAIN) ) { eof = true; break; }
+			if ( av_read_frame( fmt, pkt ) < 0 ) { eof = true; break; }
+			if ( pkt->stream_index == stream )
+				avcodec_send_packet( ctx, pkt );
+			av_packet_unref( pkt );
+		}
+		return false;
+	}
+
+	static void SDLCALL Callback( void *ud, Uint8 *out, int len )
+	{
+		BinkFSAudio *a = (BinkFSAudio*)ud;
+		int16_t *dst = (int16_t*)out;
+		int frames = len / 4;
+		while ( frames > 0 )
+		{
+			if ( a->bufPos >= a->bufLen && !a->Decode() )
+			{
+				memset( dst, 0, frames * 4 );
+				return;
+			}
+			int n = MIN( frames, a->bufLen - a->bufPos );
+			memcpy( dst, a->buf + a->bufPos * 2, n * 4 );
+			dst += n * 2; a->bufPos += n; frames -= n;
+		}
+	}
+
+	bool Open( const char *file )
+	{
+		if ( avformat_open_input( &fmt, file, nullptr, nullptr ) < 0 ) return false;
+		if ( avformat_find_stream_info( fmt, nullptr ) < 0 ) return false;
+		const AVCodec *codec = nullptr;
+		stream = av_find_best_stream( fmt, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0 );
+		if ( stream < 0 || !codec ) return false;
+		ctx = avcodec_alloc_context3( codec );
+		if ( !ctx || avcodec_parameters_to_context( ctx, fmt->streams[stream]->codecpar ) < 0 ) return false;
+		if ( avcodec_open2( ctx, codec, nullptr ) < 0 ) return false;
+		pkt = av_packet_alloc();
+		frm = av_frame_alloc();
+
+		SDL_AudioSpec want, have;
+		SDL_zero( want );
+		want.freq = ctx->sample_rate > 0 ? ctx->sample_rate : 44100;
+		want.format = AUDIO_S16SYS;
+		want.channels = 2;
+		want.samples = 2048;
+		want.callback = &BinkFSAudio::Callback;
+		want.userdata = this;
+		dev = SDL_OpenAudioDevice( nullptr, 0, &want, &have, 0 );
+		if ( !dev ) return false;
+		SDL_PauseAudioDevice( dev, 0 );
+		return true;
+	}
+
+	void Close()
+	{
+		if ( dev ) { SDL_CloseAudioDevice( dev ); dev = 0; }
+		if ( ctx ) avcodec_free_context( &ctx );
+		if ( fmt ) avformat_close_input( &fmt );
+		if ( pkt ) av_packet_free( &pkt );
+		if ( frm ) av_frame_free( &frm );
+		free( buf ); buf = nullptr;
+	}
+};
+
 // ===========================================================================
 // IVideoSubSystem Video Playback and Recording Services
 // ===========================================================================
@@ -247,6 +362,10 @@ VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename
 	float scale = MIN( (float)scrW / imgW, (float)scrH / imgH );
 	int dw = (int)( imgW * scale ), dh = (int)( imgH * scale );
 	int dx = ( scrW - dw ) / 2, dy = ( scrH - dh ) / 2;
+
+	BinkFSAudio audio;
+	if ( !audio.Open( filename ) )
+		audio.Close();
 
 	const double startTime = Plat_FloatTime();
 	bool bAbort = false;
@@ -294,6 +413,7 @@ VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename
 			ThreadSleep( 10 );
 	}
 
+	audio.Close();
 	pMovie->StopVideo();
 	pMovie->Shutdown();
 	delete pMovie;
