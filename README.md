@@ -3,13 +3,14 @@ Based on nillerusr's source engine base, built to bring Android a SteamOS level 
 Mostly vibecoded, though no trash code is making it into the repo since I actually know C++.
 
 ## Features 
-- GamepadUI (`-gamepadui`) for HL2, Portal
+- GamepadUI (`-gamepadui`) for HL2, Portal, all gamepadui assets on apk so no need for extra files
 - MangoHud (`-mangohud`) exact port with all features, customizable via `mangohud.conf` in your game directory (`srceng` or your custom game files path)
 - Some GamepadUI fixes (key binding fix for mouse and touch)
 - (GamepadUI) Touch menu in settings instead of steam input bs
+- Valve intro (media/valve.bik) with sound, to close it `-novid` or `-nointro`
 
 ## Current tasks 
-- Graphics, Shaders & Lighting, Merged episodes backport/fix for 20th anniversary update
+- (Currently W.I.P) Graphics, Shaders & Lighting, Merged episodes backport/fix for 20th anniversary update 
 
 # Source Engine
 [![GitHub Actions Status](https://github.com/nillerusr/source-engine/actions/workflows/build.yml/badge.svg)](https://github.com/nillerusr/source-engine/actions/workflows/build.yml) [![GitHub Actions Status](https://github.com/nillerusr/source-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/nillerusr/source-engine/actions/workflows/tests.yml)
