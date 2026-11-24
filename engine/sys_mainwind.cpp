@@ -1266,6 +1266,11 @@ void CGame::PlayStartupVideos( void )
 	if ( IsX360() || Plat_IsInBenchmarkMode() )
 		return;
 
+	Msg( "[Intro] PlayStartupVideos (g_pVideo=%s, novid=%d nointro=%d dev=%d allowdebug=%d)\n",
+		g_pVideo ? "yes" : "NO",
+		CommandLine()->CheckParm( "-novid" ) ? 1 : 0, CommandLine()->CheckParm( "-nointro" ) ? 1 : 0,
+		CommandLine()->CheckParm( "-dev" ) ? 1 : 0, CommandLine()->CheckParm( "-allowdebug" ) ? 1 : 0 );
+
 #ifndef SWDS
 	
 	// Wait for the mode to change and stabilized
@@ -1299,7 +1304,10 @@ void CGame::PlayStartupVideos( void )
 	// -nointro skips the startup intro (media/valve.bik) but, unlike -novid, leaves
 	// the end game / recap videos alone.
 	if ( !bEndGame && !bRecap && CommandLine()->CheckParm( "-nointro" ) )
+	{
+		Msg( "[Intro] skipped by -nointro\n" );
 		return;
+	}
 
 	const char *pszFile = "media/StartupVids.txt";
 	if ( bEndGame )
@@ -1322,6 +1330,7 @@ void CGame::PlayStartupVideos( void )
 	
 	if ((buffer == NULL) || (vidFileLength == 0))
 	{
+		Msg( "[Intro] %s not found or empty\n", pszFile );
 #if defined( ANDROID )
 		// Depots used on Android do not always ship media/StartupVids.txt; play
 		// the Valve intro directly when it is there (video_bink decodes the .bik).
@@ -1329,12 +1338,17 @@ void CGame::PlayStartupVideos( void )
 		{
 			char localPath[MAX_PATH];
 			g_pFileSystem->GetLocalPath( "media/valve.bik", localPath, sizeof(localPath) );
+			Msg( "[Intro] fallback: playing %s\n", localPath );
 
 			g_pLauncherMgr->SetMouseVisible( false );
 			VAudioInit();
 			Audio_CreateSDLAudioDevice();
 			PlayVideoAndWait( localPath, bNeedHealthWarning );
 			g_pLauncherMgr->SetMouseVisible( true );
+		}
+		else
+		{
+			Msg( "[Intro] fallback: media/valve.bik not found in GAME\n" );
 		}
 #endif
 		return;
@@ -1383,6 +1397,7 @@ void CGame::PlayStartupVideos( void )
 #endif
 
  		    g_pFileSystem->GetLocalPath( videoName, localPath, sizeof(localPath) );
+		Msg( "[Intro] playing %s (listed as %s)\n", localPath, com_token );
  		
 		PlayVideoAndWait( localPath, bNeedHealthWarning );
 		localPath[0] = 0; // just to make sure we don't play the same avi file twice in the case that one movie is there but another isn't.
@@ -1409,7 +1424,10 @@ void CGame::PlayVideoAndWait( const char *filename, bool bNeedHealthWarning )
 {
 	// do we have a filename and a video system, and not on a console?
 	if ( !filename || !filename[0] || g_pVideo == NULL )
+	{
+		Msg( "[Intro] PlayVideoAndWait: nothing to do (file=%s, g_pVideo=%s)\n", filename ? filename : "(null)", g_pVideo ? "yes" : "NO" );
 		return;
+	}
 
 	// is it the valve logo file?		
 	bool bIsValveLogo = ( Q_strstr( filename, "valve.") != NULL );
@@ -1440,6 +1458,8 @@ void CGame::PlayVideoAndWait( const char *filename, bool bNeedHealthWarning )
 	VideoResult_t status = 	g_pVideo->PlayVideoFileFullScreen( filename, "GAME", GetMainWindowPlatformSpecificHandle (),
 	                                                           m_width, m_height, m_iDesktopWidth, m_iDesktopHeight, videomode->IsWindowedMode(),
 	                                                           forcedMinTime, VideoPlaybackFlags::DEFAULT_FULLSCREEN_OPTIONS | VideoPlaybackFlags::FILL_WINDOW );
+
+	Msg( "[Intro] PlayVideoFileFullScreen(%s) returned %d\n", filename, (int) status );
 
 	// Everything ok?
 	if ( status == VideoResult::SUCCESS )
