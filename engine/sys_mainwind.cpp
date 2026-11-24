@@ -1257,6 +1257,10 @@ void CGame::InputDetachFromGameWindow()
 	DetachFromWindow();
 }
 
+#if defined( LINUX ) || defined( ANDROID )
+extern void VAudioInit();
+#endif
+
 void CGame::PlayStartupVideos( void )
 {
 	if ( IsX360() || Plat_IsInBenchmarkMode() )
@@ -1292,6 +1296,11 @@ void CGame::PlayStartupVideos( void )
 	if (!bNeedHealthWarning && !bEndGame && !bRecap && (CommandLine()->CheckParm("-dev") || CommandLine()->CheckParm("-novid") || CommandLine()->CheckParm("-allowdebug")))
 		return;
 
+	// -nointro skips the startup intro (media/valve.bik) but, unlike -novid, leaves
+	// the end game / recap videos alone.
+	if ( !bEndGame && !bRecap && CommandLine()->CheckParm( "-nointro" ) )
+		return;
+
 	const char *pszFile = "media/StartupVids.txt";
 	if ( bEndGame )
 	{
@@ -1313,6 +1322,21 @@ void CGame::PlayStartupVideos( void )
 	
 	if ((buffer == NULL) || (vidFileLength == 0))
 	{
+#if defined( ANDROID )
+		// Depots used on Android do not always ship media/StartupVids.txt; play
+		// the Valve intro directly when it is there (video_bink decodes the .bik).
+		if ( !bEndGame && !bRecap && g_pFileSystem->FileExists( "media/valve.bik", "GAME" ) )
+		{
+			char localPath[MAX_PATH];
+			g_pFileSystem->GetLocalPath( "media/valve.bik", localPath, sizeof(localPath) );
+
+			g_pLauncherMgr->SetMouseVisible( false );
+			VAudioInit();
+			Audio_CreateSDLAudioDevice();
+			PlayVideoAndWait( localPath, bNeedHealthWarning );
+			g_pLauncherMgr->SetMouseVisible( true );
+		}
+#endif
 		return;
 	}
 
