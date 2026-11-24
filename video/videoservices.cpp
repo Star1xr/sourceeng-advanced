@@ -819,8 +819,12 @@ VideoResult_t CValveVideoServices::ResolveToPlayableVideoFile( const char *pFile
 
 	// check the file extension to see if it specifies searching for any compatible video files
 	// if so, override a couple input values
-	if ( !IsMatchAnyExtension( pFileName ) )
+	// (only a wildcard extension such as "movie.*" goes straight to the search
+	// below; a concrete file name is resolved to its video system first)
+	if ( IsMatchAnyExtension( pFileName ) )
 	{
+		videoSystem = VideoSystem::DETERMINE_FROM_FILE_EXTENSION;
+		PlayAlternateIfNotAvailable = true;
 		goto search_for_video;
 	}
 	
