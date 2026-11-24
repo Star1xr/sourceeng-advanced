@@ -22,8 +22,9 @@
 #include "platform.h"
 
 
-#include "tier0/memdbgon.h"
+#include "SDL.h"
 #include "bink_material.h"
+#include "tier0/memdbgon.h"
 
 // ===========================================================================
 // Singleton to expose Bink video subsystem
@@ -37,11 +38,11 @@ EXPOSE_SINGLE_INTERFACE_GLOBALVAR( CBinkVideoSubSystem, IVideoSubSystem, VIDEO_S
 // ===========================================================================
 VideoFileExtensionInfo_t s_BinkExtensions[] = 
 {
-	{ ".bik", VideoSystem::BINK,  VideoSystemFeature::PLAY_VIDEO_FILE_IN_MATERIAL },
+	{ ".bik", VideoSystem::BINK,  VideoSystemFeature::FULL_PLAYBACK },
 };
 
 const int s_BinkExtensionCount = ARRAYSIZE( s_BinkExtensions );
-const VideoSystemFeature_t	CBinkVideoSubSystem::DEFAULT_FEATURE_SET = VideoSystemFeature::PLAY_VIDEO_FILE_IN_MATERIAL;
+const VideoSystemFeature_t	CBinkVideoSubSystem::DEFAULT_FEATURE_SET = VideoSystemFeature::FULL_PLAYBACK;
 
 // ===========================================================================
 // CBinkVideoSubSystem class
@@ -216,7 +217,92 @@ VideoSystemFeature_t CBinkVideoSubSystem::GetSupportedFileExtensionFeatures( int
 // ===========================================================================
 VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename, void *mainWindow, int windowWidth, int windowHeight, int desktopWidth, int desktopHeight, bool windowed, float forcedMinTime, VideoPlaybackFlags_t playbackFlags )
 {
-    return SetResult( VideoResult::FEATURE_NOT_AVAILABLE );
+	AssertExitV( m_CurrentStatus == VideoSystemStatus::OK, SetResult( VideoResult::SYSTEM_NOT_AVAILABLE ) );
+	AssertExitV( IS_NOT_EMPTY( filename ), SetResult( VideoResult::BAD_INPUT_PARAMETERS ) );
+
+	CBinkMaterial *pMovie = new CBinkMaterial();
+	if ( !pMovie->Init( "bink_fullscreen", filename, VideoPlaybackFlags::NO_PLAYBACK_OPTIONS ) )
+	{
+		delete pMovie;
+		return SetResult( VideoResult::VIDEO_ERROR_OCCURED );
+	}
+
+	int imgW = 0, imgH = 0;
+	float maxU = 1.0f, maxV = 1.0f;
+	pMovie->GetVideoImageSize( &imgW, &imgH );
+	pMovie->GetVideoTexCoordRange( &maxU, &maxV );
+	if ( imgW <= 0 || imgH <= 0 || maxU <= 0.0f || maxV <= 0.0f )
+	{
+		pMovie->Shutdown();
+		delete pMovie;
+		return SetResult( VideoResult::VIDEO_ERROR_OCCURED );
+	}
+	const float texW = imgW / maxU, texH = imgH / maxV;
+
+	if ( !pMovie->StartVideo() )
+	{
+		pMovie->Shutdown();
+		delete pMovie;
+		return SetResult( VideoResult::VIDEO_ERROR_OCCURED );
+	}
+
+	// Letterbox the movie into the window
+	int scrW = windowWidth > 0 ? windowWidth : desktopWidth;
+	int scrH = windowHeight > 0 ? windowHeight : desktopHeight;
+	float scale = MIN( (float)scrW / imgW, (float)scrH / imgH );
+	int dw = (int)( imgW * scale ), dh = (int)( imgH * scale );
+	int dx = ( scrW - dw ) / 2, dy = ( scrH - dh ) / 2;
+
+	const double startTime = Plat_FloatTime();
+	bool bAbort = false;
+
+	while ( !bAbort )
+	{
+		SDL_Event ev;
+		while ( SDL_PollEvent( &ev ) )
+		{
+			switch ( ev.type )
+			{
+			case SDL_QUIT:
+			case SDL_KEYDOWN:
+			case SDL_MOUSEBUTTONDOWN:
+			case SDL_FINGERDOWN:
+			case SDL_CONTROLLERBUTTONDOWN:
+				bAbort = true;
+				break;
+			}
+		}
+
+		bool bPlaying = pMovie->Update();
+		if ( !bPlaying )
+			break;
+
+		materials->BeginFrame( 0 );
+		{
+			CMatRenderContextPtr pRenderContext( materials );
+			pRenderContext->Viewport( 0, 0, scrW, scrH );
+			pRenderContext->ClearColor3ub( 0, 0, 0 );
+			pRenderContext->ClearBuffers( true, true, true );
+			pRenderContext->DrawScreenSpaceRectangle( pMovie->GetMaterial(), dx, dy, dw, dh,
+				0, 0, imgW - 1, imgH - 1, (int)texW, (int)texH );
+		}
+		materials->EndFrame();
+		materials->SwapBuffers();
+
+		ThreadSleep( 2 );
+	}
+
+	// honour a forced minimum on-screen time
+	if ( !bAbort && forcedMinTime > 0.0f )
+	{
+		while ( Plat_FloatTime() - startTime < forcedMinTime )
+			ThreadSleep( 10 );
+	}
+
+	pMovie->StopVideo();
+	pMovie->Shutdown();
+	delete pMovie;
+	return SetResult( VideoResult::SUCCESS );
 }
 
 
