@@ -49,6 +49,34 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.arch }}-
 
+      # FFmpeg (Bink decoders only) for video_bink, which plays media/valve.bik.
+      # The build is cached; on a hit the script only copies the cached libs into
+      # lib/android/<cpu>/ and does not download the clang toolchain.
+      - name: Restore ffmpeg cache
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ffmpeg-out-*
+          key: ffmpeg-6.1-${{ matrix.arch }}-v1
+
+      - name: Build ffmpeg for bink
+        run: |
+          case "${{ matrix.arch }}" in
+            arm64)  ABI=arm64-v8a ;;
+            armv7a) ABI=armeabi-v7a ;;
+          esac
+          chmod +x scripts/build-ffmpeg-android.sh
+          scripts/build-ffmpeg-android.sh "$ABI"
+
+      # saved right away so a later engine build failure does not throw the
+      # ffmpeg build away
+      - name: Save ffmpeg cache
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ffmpeg-out-*
+          key: ffmpeg-6.1-${{ matrix.arch }}-v1
+
       - name: Build android-${{ matrix.arch }}
         run: |
           chmod +x scripts/build-android-${{ matrix.arch }}.sh
@@ -80,6 +108,9 @@ jobs:
             exit 1
           fi
           cp "$SDL" "apklibs/$ABI/"
+          # video_bink links ffmpeg at runtime, so ship those next to it
+          find "lib/android/$CPU" -maxdepth 1 \( -name 'libav*.so' -o -name 'libsw*.so' \) -exec cp -v {} "apklibs/$ABI/" \;
+          [ -f "apklibs/$ABI/libavcodec.so" ] || echo "::warning::libavcodec.so is missing, media/valve.bik will not play"
           ls -l "apklibs/$ABI"
 
       - name: ccache stats
