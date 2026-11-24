@@ -1365,8 +1365,24 @@ void CGame::PlayStartupVideos( void )
 
 		// get the path to the media file and play it.
 		char localPath[MAX_PATH];
+		char videoName[MAX_PATH];
+		Q_strncpy( videoName, com_token, sizeof( videoName ) );
 
- 		    g_pFileSystem->GetLocalPath( com_token, localPath, sizeof(localPath) );
+#if defined( ANDROID )
+		// The depot lists e.g. media/valve.avi, but only video_bink exists here:
+		// play the Bink version of the same movie when the depot has it.
+		{
+			char bikName[MAX_PATH];
+			Q_strncpy( bikName, videoName, sizeof( bikName ) );
+			Q_SetExtension( bikName, ".bik", sizeof( bikName ) );
+			if ( g_pFileSystem->FileExists( bikName, "GAME" ) )
+			{
+				Q_strncpy( videoName, bikName, sizeof( videoName ) );
+			}
+		}
+#endif
+
+ 		    g_pFileSystem->GetLocalPath( videoName, localPath, sizeof(localPath) );
  		
 		PlayVideoAndWait( localPath, bNeedHealthWarning );
 		localPath[0] = 0; // just to make sure we don't play the same avi file twice in the case that one movie is there but another isn't.
