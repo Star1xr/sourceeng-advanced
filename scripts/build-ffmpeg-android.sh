@@ -15,6 +15,7 @@ case "$ABI" in
 	armeabi-v7a)
 		CPU=arm
 		ARCH=arm
+		NDK_ARCH=arch-arm
 		# keep in sync with scripts/waifulib/xcompile.py (armeabi-v7a-hard)
 		TRIPLE=arm-linux-androideabi21
 		GCC_TOOLCHAIN=arm-linux-androideabi-4.9
@@ -24,6 +25,8 @@ case "$ABI" in
 	arm64-v8a)
 		CPU=aarch64
 		ARCH=aarch64
+		# the NDK calls the 64 bit ARM sysroot arch-arm64, not arch-aarch64
+		NDK_ARCH=arch-arm64
 		TRIPLE=aarch64-linux-android21
 		GCC_TOOLCHAIN=aarch64-linux-android-4.9
 		CPUFLAGS=""
@@ -77,7 +80,7 @@ if [ ! -d "$LLVM" ]; then
 	tar -xf "$LLVM_NAME.tar.xz" && rm -f "$LLVM_NAME.tar.xz"
 fi
 
-SYSROOT=$NDK/platforms/android-21/arch-$CPU
+SYSROOT=$NDK/platforms/android-21/$NDK_ARCH
 GCC=$NDK/toolchains/$GCC_TOOLCHAIN/prebuilt/linux-x86_64
 
 CFLAGS="--target=$TRIPLE --sysroot=$SYSROOT --gcc-toolchain=$GCC $CPUFLAGS"
