@@ -239,12 +239,7 @@ VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename
 	}
 	const float texW = imgW / maxU, texH = imgH / maxV;
 
-	if ( !pMovie->StartVideo() )
-	{
-		pMovie->Shutdown();
-		delete pMovie;
-		return SetResult( VideoResult::VIDEO_ERROR_OCCURED );
-	}
+	// Init() already auto-starts playback
 
 	// Letterbox the movie into the window
 	int scrW = windowWidth > 0 ? windowWidth : desktopWidth;
