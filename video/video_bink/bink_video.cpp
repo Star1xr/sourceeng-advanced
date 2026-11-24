@@ -397,19 +397,15 @@ VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename
 
 	while ( !bAbort )
 	{
+		// The intro is not skippable: key presses, mouse clicks, touches and
+		// controller buttons are drained and ignored (so they do not leak into
+		// the menu that follows). Only a real quit request ends it early,
+		// otherwise the app could not be closed while the intro is playing.
 		SDL_Event ev;
 		while ( SDL_PollEvent( &ev ) )
 		{
-			switch ( ev.type )
-			{
-			case SDL_QUIT:
-			case SDL_KEYDOWN:
-			case SDL_MOUSEBUTTONDOWN:
-			case SDL_FINGERDOWN:
-			case SDL_CONTROLLERBUTTONDOWN:
+			if ( ev.type == SDL_QUIT )
 				bAbort = true;
-				break;
-			}
 		}
 
 		bool bPlaying = pMovie->Update();

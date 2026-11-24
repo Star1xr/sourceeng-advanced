@@ -1417,7 +1417,8 @@ void CGame::PlayStartupVideos( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Plays a video until the video completes or ESC is pressed
+// Purpose: Plays a video until the video completes. On Android (video_bink) the
+//          intro cannot be skipped by keyboard, mouse or touch input.
 // Input  : *filename - Name of the file (relative to the filesystem)
 //-----------------------------------------------------------------------------
 void CGame::PlayVideoAndWait( const char *filename, bool bNeedHealthWarning )
