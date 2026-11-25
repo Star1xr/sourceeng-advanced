@@ -22,8 +22,9 @@
 #include "platform.h"
 
 
-#include "tier0/memdbgon.h"
+#include "SDL.h"
 #include "bink_material.h"
+#include "tier0/memdbgon.h"
 
 // ===========================================================================
 // Singleton to expose Bink video subsystem
@@ -37,11 +38,11 @@ EXPOSE_SINGLE_INTERFACE_GLOBALVAR( CBinkVideoSubSystem, IVideoSubSystem, VIDEO_S
 // ===========================================================================
 VideoFileExtensionInfo_t s_BinkExtensions[] = 
 {
-	{ ".bik", VideoSystem::BINK,  VideoSystemFeature::PLAY_VIDEO_FILE_IN_MATERIAL },
+	{ ".bik", VideoSystem::BINK,  VideoSystemFeature::FULL_PLAYBACK },
 };
 
 const int s_BinkExtensionCount = ARRAYSIZE( s_BinkExtensions );
-const VideoSystemFeature_t	CBinkVideoSubSystem::DEFAULT_FEATURE_SET = VideoSystemFeature::PLAY_VIDEO_FILE_IN_MATERIAL;
+const VideoSystemFeature_t	CBinkVideoSubSystem::DEFAULT_FEATURE_SET = VideoSystemFeature::FULL_PLAYBACK;
 
 // ===========================================================================
 // CBinkVideoSubSystem class
@@ -167,10 +168,149 @@ bool CBinkVideoSubSystem::ShutdownVideoSystem()
 }
 
 
+// ===========================================================================
+// Minimal self-contained audio player for fullscreen movies: decodes the audio
+// stream with ffmpeg inside the SDL audio callback of its own SDL device.
+// ===========================================================================
+static int g_EngineFreq = 44100;
+static int g_EngineChannels = 2;
+
+struct BinkFSAudio;
+static BinkFSAudio * volatile g_pActiveFSAudio = nullptr;
+
+struct BinkFSAudio
+{
+	AVFormatContext *fmt = nullptr;
+	AVCodecContext *ctx = nullptr;
+	AVPacket *pkt = nullptr;
+	AVFrame *frm = nullptr;
+	int stream = -1;
+	SDL_AudioDeviceID dev = 0;
+	int16_t *buf = nullptr;
+	int bufCap = 0, bufLen = 0, bufPos = 0;	// in stereo frames
+	bool eof = false;
+
+	static float Sample( const AVFrame *f, int c, int i )
+	{
+		int ch = f->ch_layout.nb_channels;
+		switch ( f->format )
+		{
+		case AV_SAMPLE_FMT_FLTP: return ((float*)f->extended_data[c])[i];
+		case AV_SAMPLE_FMT_FLT:  return ((float*)f->data[0])[i*ch+c];
+		case AV_SAMPLE_FMT_S16P: return ((int16_t*)f->extended_data[c])[i] / 32768.0f;
+		case AV_SAMPLE_FMT_S16:  return ((int16_t*)f->data[0])[i*ch+c] / 32768.0f;
+		}
+		return 0.0f;
+	}
+
+	bool Decode()
+	{
+		while ( !eof )
+		{
+			int r = avcodec_receive_frame( ctx, frm );
+			if ( r == 0 )
+			{
+				int n = frm->nb_samples, ch = frm->ch_layout.nb_channels;
+				int srcRate = ctx->sample_rate > 0 ? ctx->sample_rate : g_EngineFreq;
+				int m = (int)( (int64_t)n * g_EngineFreq / srcRate );
+				if ( m < 1 ) m = 1;
+				if ( m > bufCap ) { buf = (int16_t*)realloc( buf, m * 4 ); bufCap = m; }
+				for ( int j = 0; j < m; j++ )
+				{
+					int i = (int)( (int64_t)j * srcRate / g_EngineFreq );
+					if ( i >= n ) i = n - 1;
+					for ( int c = 0; c < 2; c++ )
+					{
+						float v = Sample( frm, ( c < ch ) ? c : 0, i );
+						v = v > 1.0f ? 1.0f : ( v < -1.0f ? -1.0f : v );
+						buf[j*2+c] = (int16_t)( v * 32767.0f );
+					}
+				}
+				n = m;
+				bufLen = n; bufPos = 0;
+				av_frame_unref( frm );
+				return true;
+			}
+			if ( r != AVERROR(EAGAIN) ) { eof = true; break; }
+			if ( av_read_frame( fmt, pkt ) < 0 ) { eof = true; break; }
+			if ( pkt->stream_index == stream )
+				avcodec_send_packet( ctx, pkt );
+			av_packet_unref( pkt );
+		}
+		return false;
+	}
+
+	// Mixes decoded movie audio into the engine's SDL output buffer (S16 stereo)
+	void Mix( Uint8 *out, int len )
+	{
+		int16_t *dst = (int16_t*)out;
+		int frames = len / ( 2 * g_EngineChannels );
+		if ( g_EngineChannels != 2 ) return;
+		while ( frames > 0 )
+		{
+			if ( bufPos >= bufLen && !Decode() )
+				return;
+			int n = MIN( frames, bufLen - bufPos );
+			for ( int i = 0; i < n * 2; i++ )
+			{
+				int v = dst[i] + buf[bufPos * 2 + i];
+				dst[i] = (int16_t)( v > 32767 ? 32767 : ( v < -32768 ? -32768 : v ) );
+			}
+			dst += n * 2; bufPos += n; frames -= n;
+		}
+	}
+
+	bool Open( const char *file )
+	{
+		if ( avformat_open_input( &fmt, file, nullptr, nullptr ) < 0 ) return false;
+		if ( avformat_find_stream_info( fmt, nullptr ) < 0 ) return false;
+		const AVCodec *codec = nullptr;
+		stream = av_find_best_stream( fmt, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0 );
+		if ( stream < 0 || !codec ) return false;
+		ctx = avcodec_alloc_context3( codec );
+		if ( !ctx || avcodec_parameters_to_context( ctx, fmt->streams[stream]->codecpar ) < 0 ) return false;
+		if ( avcodec_open2( ctx, codec, nullptr ) < 0 ) return false;
+		pkt = av_packet_alloc();
+		frm = av_frame_alloc();
+
+		g_pActiveFSAudio = this;
+		return true;
+	}
+
+	void Close()
+	{
+		if ( g_pActiveFSAudio == this ) { g_pActiveFSAudio = nullptr; SDL_Delay( 60 ); }
+		if ( ctx ) avcodec_free_context( &ctx );
+		if ( fmt ) avformat_close_input( &fmt );
+		if ( pkt ) av_packet_free( &pkt );
+		if ( frm ) av_frame_free( &frm );
+		free( buf ); buf = nullptr;
+	}
+};
+
 VideoResult_t CBinkVideoSubSystem::VideoSoundDeviceCMD( VideoSoundDeviceOperation_t operation, void *pDevice, void *pData )
 {
 	switch ( operation ) 
 	{
+		case VideoSoundDeviceOperation::SET_SDL_PARAMS:
+		{
+			const SDL_AudioSpec *spec = (const SDL_AudioSpec *)pData;
+			if ( spec )
+			{
+				g_EngineFreq = spec->freq;
+				g_EngineChannels = spec->channels;
+			}
+			return SetResult( VideoResult::SUCCESS );
+		}
+
+		case VideoSoundDeviceOperation::SDLMIXER_CALLBACK:
+		{
+			BinkFSAudio *a = g_pActiveFSAudio;
+			if ( a && pDevice && pData )
+				a->Mix( (Uint8 *)pDevice, *(const int *)pData );
+			return SetResult( VideoResult::SUCCESS );
+		}
+
 		case VideoSoundDeviceOperation::SET_DIRECT_SOUND_DEVICE:
 		{
 			return SetResult( VideoResult::OPERATION_NOT_SUPPORTED );
@@ -211,12 +351,94 @@ VideoSystemFeature_t CBinkVideoSubSystem::GetSupportedFileExtensionFeatures( int
 }
 
 
+
 // ===========================================================================
 // IVideoSubSystem Video Playback and Recording Services
 // ===========================================================================
 VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename, void *mainWindow, int windowWidth, int windowHeight, int desktopWidth, int desktopHeight, bool windowed, float forcedMinTime, VideoPlaybackFlags_t playbackFlags )
 {
-    return SetResult( VideoResult::FEATURE_NOT_AVAILABLE );
+	AssertExitV( m_CurrentStatus == VideoSystemStatus::OK, SetResult( VideoResult::SYSTEM_NOT_AVAILABLE ) );
+	AssertExitV( IS_NOT_EMPTY( filename ), SetResult( VideoResult::BAD_INPUT_PARAMETERS ) );
+
+	CBinkMaterial *pMovie = new CBinkMaterial();
+	if ( !pMovie->Init( "bink_fullscreen", filename, VideoPlaybackFlags::NO_PLAYBACK_OPTIONS ) )
+	{
+		delete pMovie;
+		return SetResult( VideoResult::VIDEO_ERROR_OCCURED );
+	}
+
+	int imgW = 0, imgH = 0;
+	float maxU = 1.0f, maxV = 1.0f;
+	pMovie->GetVideoImageSize( &imgW, &imgH );
+	pMovie->GetVideoTexCoordRange( &maxU, &maxV );
+	if ( imgW <= 0 || imgH <= 0 || maxU <= 0.0f || maxV <= 0.0f )
+	{
+		pMovie->Shutdown();
+		delete pMovie;
+		return SetResult( VideoResult::VIDEO_ERROR_OCCURED );
+	}
+	const float texW = imgW / maxU, texH = imgH / maxV;
+
+	// Init() already auto-starts playback
+
+	// Letterbox the movie into the window
+	int scrW = windowWidth > 0 ? windowWidth : desktopWidth;
+	int scrH = windowHeight > 0 ? windowHeight : desktopHeight;
+	float scale = MIN( (float)scrW / imgW, (float)scrH / imgH );
+	int dw = (int)( imgW * scale ), dh = (int)( imgH * scale );
+	int dx = ( scrW - dw ) / 2, dy = ( scrH - dh ) / 2;
+
+	BinkFSAudio audio;
+	if ( !audio.Open( filename ) )
+		audio.Close();
+
+	const double startTime = Plat_FloatTime();
+	bool bAbort = false;
+
+	while ( !bAbort )
+	{
+		// The intro is not skippable: key presses, mouse clicks, touches and
+		// controller buttons are drained and ignored (so they do not leak into
+		// the menu that follows). Only a real quit request ends it early,
+		// otherwise the app could not be closed while the intro is playing.
+		SDL_Event ev;
+		while ( SDL_PollEvent( &ev ) )
+		{
+			if ( ev.type == SDL_QUIT )
+				bAbort = true;
+		}
+
+		bool bPlaying = pMovie->Update();
+		if ( !bPlaying )
+			break;
+
+		materials->BeginFrame( 0 );
+		{
+			CMatRenderContextPtr pRenderContext( materials );
+			pRenderContext->Viewport( 0, 0, scrW, scrH );
+			pRenderContext->ClearColor3ub( 0, 0, 0 );
+			pRenderContext->ClearBuffers( true, true, true );
+			pRenderContext->DrawScreenSpaceRectangle( pMovie->GetMaterial(), dx, dy, dw, dh,
+				0, 0, imgW - 1, imgH - 1, (int)texW, (int)texH );
+		}
+		materials->EndFrame();
+		materials->SwapBuffers();
+
+		ThreadSleep( 2 );
+	}
+
+	// honour a forced minimum on-screen time
+	if ( !bAbort && forcedMinTime > 0.0f )
+	{
+		while ( Plat_FloatTime() - startTime < forcedMinTime )
+			ThreadSleep( 10 );
+	}
+
+	audio.Close();
+	pMovie->StopVideo();
+	pMovie->Shutdown();
+	delete pMovie;
+	return SetResult( VideoResult::SUCCESS );
 }
 
 

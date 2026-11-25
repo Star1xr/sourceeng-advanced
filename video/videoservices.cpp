@@ -81,7 +81,9 @@ struct VideoSystemInfo_t
 static VideoSystemInfo_t s_VideoAppSystems[] = 
 {
 	{ VideoSystem::QUICKTIME,	PLATFORM_WIN32 | PLATFORM_OSX,							"video_quicktime",  VIDEO_SUBSYSTEM_INTERFACE_VERSION },
-	{ VideoSystem::BINK,		PLATFORM_WIN32 | PLATFORM_OSX | PLATFORM_XBOX_360 | PLATFORM_LINUX,		"video_bink",	    VIDEO_SUBSYSTEM_INTERFACE_VERSION },
+#if !defined( WIN32 )
+	{ VideoSystem::BINK,		PLATFORM_OSX | PLATFORM_XBOX_360 | PLATFORM_LINUX,		"video_bink",	    VIDEO_SUBSYSTEM_INTERFACE_VERSION },
+#endif
 	//{ VideoSystem::AVI,			PLATFORM_WIN32,											"avi",				VIDEO_SUBSYSTEM_INTERFACE_VERSION },
 	//{ VideoSystem::WMV,			PLATFORM_WIN32,											"wmv",				VIDEO_SUBSYSTEM_INTERFACE_VERSION },
 	{ VideoSystem::WEBM,	PLATFORM_LINUX,							"video_webm",  VIDEO_SUBSYSTEM_INTERFACE_VERSION },
@@ -817,8 +819,12 @@ VideoResult_t CValveVideoServices::ResolveToPlayableVideoFile( const char *pFile
 
 	// check the file extension to see if it specifies searching for any compatible video files
 	// if so, override a couple input values
-	if ( !IsMatchAnyExtension( pFileName ) )
+	// (only a wildcard extension such as "movie.*" goes straight to the search
+	// below; a concrete file name is resolved to its video system first)
+	if ( IsMatchAnyExtension( pFileName ) )
 	{
+		videoSystem = VideoSystem::DETERMINE_FROM_FILE_EXTENSION;
+		PlayAlternateIfNotAvailable = true;
 		goto search_for_video;
 	}
 	
