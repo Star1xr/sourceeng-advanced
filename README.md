@@ -10,7 +10,7 @@ Mostly vibecoded, though no trash code is making it into the repo since I actual
 - Bink video and bink audio, valve intro (media/valve.bik) with sound, to close it `-novid` or `-nointro`
 
 ## Current tasks 
-- (Currently W.I.P) Fix Graphics, Shaders & Lighting and Merged episodes (not sure about merged episodes) from 20th anniversary update
+- (Currently W.I.P) 20th anniversary update fix: Fix Graphics, Shaders & Lighting and Merged episodes (not sure about merged episodes) from 20th anni. update
 - dxvk-native (Tested on csso-android-enhanced. Will implement it here soon and finish it up. It has some glitches, but it boots and runs fast. Needs fixes.)
 
 ## Full Progress
