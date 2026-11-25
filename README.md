@@ -13,6 +13,8 @@ Mostly vibecoded, though no trash code is making it into the repo since I actual
 - (Currently W.I.P) Fix Graphics, Shaders & Lighting and Merged episodes (not sure about merged episodes) from 20th anniversary update
 - dxvk-native (Tested on csso-android-enhanced. Will implement it here soon and finish it up. It has some glitches, but it boots and runs fast. Needs fixes.)
 
+## Full Progress
+
 ![Progress](https://raw.githubusercontent.com/Star1xr/sourceeng-advanced/master/docs/progress.svg)
 
 # Source Engine
