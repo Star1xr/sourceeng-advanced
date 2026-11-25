@@ -156,6 +156,8 @@ public:
    }
 
    bool UpdateCPUData();
+   bool InitSysfs();
+   bool UpdateCPUDataSysfs();
    bool UpdateCoreMhz();
    bool UpdateCpuTemp();
    bool UpdateCpuPower();
@@ -179,6 +181,9 @@ private:
    double m_cpuPeriod = 0;
    bool m_updatedCPUs = false; // TODO use caching or just update?
    bool m_inited = false;
+   bool m_sysfsMode = false; // /proc/stat unreadable (Android 8+): estimate load from cpufreq
+   struct SysfsCore { long long minKhz = 0, maxKhz = 0; };
+   std::vector<SysfsCore> m_sysfsCores;
    FILE *m_cpuTempFile = nullptr;
    std::unique_ptr<CPUPowerData> m_cpuPowerData;
 };

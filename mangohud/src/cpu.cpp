@@ -1,5 +1,6 @@
 #include "port/string_compat.h"
 #include "cpu.h"
+#include <unistd.h>
 #include <memory>
 #include <string>
 #include <iostream>
@@ -117,9 +118,17 @@ bool CPUStats::Init()
     bool first = true;
     m_cpuData.clear();
 
-    if (!file.is_open()) {
-        SPDLOG_ERROR("Failed to opening " PROCSTATFILE);
-        return false;
+    // Android 8+ denies apps access to /proc/stat; estimate from cpufreq instead
+    bool procOk = false;
+    if (file.is_open()) {
+        std::string probe;
+        procOk = std::getline(file, probe) && starts_with(probe, "cpu");
+        file.clear();
+        file.seekg(0);
+    }
+    if (!procOk) {
+        SPDLOG_WARN("Cannot read " PROCSTATFILE ", falling back to sysfs cpufreq");
+        return InitSysfs();
     }
 
     do {
@@ -162,6 +171,81 @@ bool CPUStats::Reinit()
     return Init();
 }
 
+
+static bool read_ll(const std::string& path, long long& out)
+{
+    FILE *fp = fopen(path.c_str(), "r");
+    if (!fp)
+        return false;
+    long long v = 0;
+    bool ok = fscanf(fp, "%lld", &v) == 1;
+    fclose(fp);
+    if (ok)
+        out = v;
+    return ok;
+}
+
+bool CPUStats::InitSysfs()
+{
+    m_cpuData.clear();
+    m_sysfsCores.clear();
+
+    for (int i = 0; i < 64; i++) {
+        std::string base = "/sys/devices/system/cpu/cpu" + mh::to_string(i);
+        if (access(base.c_str(), F_OK) != 0)
+            break;
+
+        CPUData cpu = {};
+        cpu.cpu_id = i;
+        cpu.totalTime = 1;
+        cpu.totalPeriod = 1;
+        m_cpuData.push_back(cpu);
+
+        SysfsCore core;
+        if (!read_ll(base + "/cpufreq/cpuinfo_min_freq", core.minKhz))
+            read_ll(base + "/cpufreq/scaling_min_freq", core.minKhz);
+        if (!read_ll(base + "/cpufreq/cpuinfo_max_freq", core.maxKhz))
+            read_ll(base + "/cpufreq/scaling_max_freq", core.maxKhz);
+        m_sysfsCores.push_back(core);
+    }
+
+    if (m_cpuData.empty())
+        return false;
+
+    m_sysfsMode = true;
+    m_inited = true;
+    return UpdateCPUDataSysfs();
+}
+
+// Load estimate: where the current frequency sits between min and max.
+bool CPUStats::UpdateCPUDataSysfs()
+{
+    float sum = 0.0f;
+    int online = 0;
+
+    for (size_t i = 0; i < m_cpuData.size(); i++) {
+        CPUData& cpu = m_cpuData[i];
+        const SysfsCore& core = m_sysfsCores[i];
+        long long cur = 0;
+        float pct = 0.0f;
+        std::string base = "/sys/devices/system/cpu/cpu" + mh::to_string(cpu.cpu_id) + "/cpufreq/scaling_cur_freq";
+        if (read_ll(base, cur)) {
+            cpu.mhz = (int)(cur / 1000);
+            if (core.maxKhz > core.minKhz)
+                pct = (float)(cur - core.minKhz) * 100.0f / (float)(core.maxKhz - core.minKhz);
+            pct = std::min(std::max(pct, 0.0f), 100.0f);
+            sum += pct;
+            online++;
+        }
+        cpu.percent = pct;
+    }
+
+    m_cpuDataTotal.percent = online ? sum / online : 0.0f;
+    m_cpuPeriod = 1.0;
+    m_updatedCPUs = true;
+    return true;
+}
+
 //TODO take sampling interval into account?
 bool CPUStats::UpdateCPUData()
 {
@@ -172,6 +256,9 @@ bool CPUStats::UpdateCPUData()
 
     if (!m_inited)
         return false;
+
+    if (m_sysfsMode)
+        return UpdateCPUDataSysfs();
 
     std::string line;
     std::ifstream file (PROCSTATFILE);
