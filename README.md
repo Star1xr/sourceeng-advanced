@@ -2,8 +2,6 @@
 Based on nillerusr's source engine base, built to bring Android a SteamOS level experience, both in gameplay feel and visual polish to the Source Engine base.
 Mostly vibecoded, though no trash code is making it into the repo since I actually know C++
 
-Progress
-
 ![](https://geps.dev/progress/80)
 
 ## Features 
