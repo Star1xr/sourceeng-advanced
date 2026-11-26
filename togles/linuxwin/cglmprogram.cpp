@@ -990,10 +990,14 @@ bool CGLMShaderPair::SetProgramPair( CGLMProgram *vp, CGLMProgram *fp )
 
 			GLchar  log[4096];
 			gGL->glGetProgramInfoLog( m_program, sizeof(log), &maxLength, log );
-			if( maxLength )
+			// Print the cause first and on one line: the full GLSL dumps are thousands
+			// of lines, and a truncated log used to cut off right before the link log.
+			// Use -glshaderdump to get the full vertex/fragment source as before.
+			Msg( "shader %d link FAILED: vp=%s fp=%s\n  link log: %s\n", m_program,
+				vp->m_shaderName, fp->m_shaderName, maxLength ? log : "(empty)" );
+			if ( CommandLine()->FindParm( "-glshaderdump" ) )
 			{
-				Msg("vp: \n%s\nfp: \n%s\n", vp->m_text, fp->m_text );
-				Msg("shader %d link log: %s\n", m_program, log);
+				Msg( "vp: \n%s\nfp: \n%s\n", vp->m_text, fp->m_text );
 			}
 		}
 		
