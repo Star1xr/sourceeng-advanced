@@ -1100,6 +1100,16 @@ bool CShaderDeviceMgrDx8::ComputeCapsFromD3D( HardwareCaps_t *pCaps, int nAdapte
 		pCaps->m_HDRType = HDR_TYPE_FLOAT;
 	}
 
+#if defined( ANDROID )
+	// HDR on GLES is opt-in (-hdr). With the 20th anniversary content (HDR
+	// lightmaps + auto exposure) the whole screen came out far too dark, while
+	// the pre-anniversary content, which never ran in HDR on GL, was fine.
+	if ( !CommandLine()->FindParm( "-hdr" ) )
+	{
+		pCaps->m_HDRType = HDR_TYPE_NONE;
+	}
+#endif
+
 	pCaps->m_bColorOnSecondStream = caps.MaxStreams > 1;
 
 	pCaps->m_bSupportsStreamOffset = ( ( caps.DevCaps2 & D3DDEVCAPS2_STREAMOFFSET ) &&	// Tie these caps together since we want to filter out
