@@ -1,4 +1,4 @@
-//======= Copyright ï¿½ 1996-2008, Valve Corporation, All rights reserved. ======
+//======= Copyright © 1996-2008, Valve Corporation, All rights reserved. ======
 
 // STATIC: "CUBEMAP"					"0..1"
 // STATIC: "DIFFUSELIGHTING"			"0..1"
@@ -15,7 +15,7 @@
 // STATIC: "FLASHLIGHTDEPTHFILTERMODE"	"0..0"						[ps20b] [XBOX]
 // STATIC: "BLENDTINTBYBASEALPHA"  "0..1"
 
-// DYNAMIC: "PIXELFOGTYPE"				"0..2"
+// DYNAMIC: "PIXELFOGTYPE"				"0..1"						[ps20]
 // DYNAMIC: "WRITEWATERFOGTODESTALPHA"	"0..1"						[ps20]
 // DYNAMIC: "NUM_LIGHTS"				"0..2"						[ps20]
 // DYNAMIC: "NUM_LIGHTS"				"0..4"						[ps20b]
@@ -326,22 +326,24 @@ float4 main( PS_INPUT i ) : COLOR
 
 	float3 result = diffuseComponent + specularLighting;
 
-	float fogFactor = CalcPixelFogFactor( PIXELFOGTYPE, g_FogParams, g_EyePos.xyz, i.worldPos_projPosZ.xyz, i.worldPos_projPosZ.w );
+#if defined(SHADER_MODEL_PS_2_0)
+	float fogFactor = CalcPixelFogFactor( PIXELFOGTYPE, g_FogParams, g_EyePos.z, i.worldPos_projPosZ.z, i.worldPos_projPosZ.w );
+#else
+	float fogFactor = CalcPixelFogFactorConst( g_fPixelFogType, g_FogParams, g_EyePos.z, i.worldPos_projPosZ.z, i.worldPos_projPosZ.w );
+#endif
 
 #if defined( SHADER_MODEL_PS_2_0 )
 	#if WRITEWATERFOGTODESTALPHA && (PIXELFOGTYPE == PIXEL_FOG_TYPE_HEIGHT)
 		alpha = fogFactor;
 	#endif
 #else // 2b or higher
-	#if (PIXELFOGTYPE == PIXEL_FOG_TYPE_HEIGHT)
-		alpha = lerp( alpha, fogFactor, g_fWriteWaterFogToDestAlpha ); // Use the fog factor if it's height fog
-	#endif
+	alpha = lerp( alpha, fogFactor, g_fPixelFogType * g_fWriteWaterFogToDestAlpha ); // Use the fog factor if it's height fog
 #endif
 
 #if defined( SHADER_MODEL_PS_2_0 )
 	return FinalOutput( float4( result.rgb, alpha ), fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR, false, i.worldPos_projPosZ.w );
 #else
-	return FinalOutput( float4( result.rgb, alpha ), fogFactor, PIXELFOGTYPE, TONEMAP_SCALE_LINEAR, g_fWriteDepthToAlpha, i.worldPos_projPosZ.w );
+	return FinalOutputConst( float4( result.rgb, alpha ), fogFactor, g_fPixelFogType, TONEMAP_SCALE_LINEAR, g_fWriteDepthToAlpha, i.worldPos_projPosZ.w );
 #endif
 
 }

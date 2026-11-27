@@ -2581,6 +2581,13 @@ bool CShaderManager::LoadAndCreateShaders( ShaderLookup_t &lookup, bool bVertexS
 
 		lookup.m_Flags = pHeader->m_nFlags;
 
+		// The number of dynamic combos baked into the shipped .vcs must equal the product of
+		// the DYNAMIC ranges in our fxctmp9 headers, otherwise every combo index is off and
+		// the wrong variant (or none: "Couldn't load combo") gets picked. Log it once per
+		// file so a mismatch can be found by comparing against the headers.
+		Msg( "[vcs] %s: version %d, dynamic combos %d, total %d\n", filename,
+			pHeader->m_nVersion, pHeader->m_nDynamicCombos, pHeader->m_nTotalCombos );
+
 		pFileCache->m_Name = lookup.m_Name;
 		pFileCache->m_Filename = m_ShaderSymbolTable.AddString( filename );
 		pFileCache->m_bVertexShader = bVertexShader;
