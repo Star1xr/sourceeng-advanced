@@ -291,6 +291,10 @@ void CEngine::Frame( void )
 {
 	// yield the CPU for a little while when paused, minimized, or not the focus
 	// FIXME:  Move this to main windows message pump?
+#if !defined( ANDROID )
+	// Not on Android: the activity is paused when it goes to the background (SDL blocks the
+	// main thread then), so this sleep never saves anything there. It only hurt: whenever the
+	// focus event was missed the engine ran at ~1/engine_no_focus_sleep fps until input came in.
 	if ( IsPC() && !game->IsActiveApp() && !sv.IsDedicated() && engine_no_focus_sleep.GetInt() > 0 )
 	{
 		VPROF_BUDGET( "Sleep", VPROF_BUDGETGROUP_SLEEPING );
@@ -299,6 +303,7 @@ void CEngine::Frame( void )
 #endif
 			g_pInputSystem->SleepUntilInput( engine_no_focus_sleep.GetInt() );
 	}
+#endif // !ANDROID
 
 	if ( m_flPreviousTime == 0 )
 	{

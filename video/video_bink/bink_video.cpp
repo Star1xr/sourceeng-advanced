@@ -401,12 +401,23 @@ VideoResult_t CBinkVideoSubSystem::PlayVideoFileFullScreen( const char *filename
 		// controller buttons are drained and ignored (so they do not leak into
 		// the menu that follows). Only a real quit request ends it early,
 		// otherwise the app could not be closed while the intro is playing.
+		//
+		// Only user input is discarded. Window and app lifecycle events must stay in the
+		// queue for the engine: if the intro eats SDL_WINDOWEVENT_FOCUS_GAINED the engine
+		// never learns it is the active app, and CEngine::Frame then sleeps up to
+		// engine_no_focus_sleep ms every frame (fps tied to how often you touch the screen).
+		// Controller/joystick device add/remove events are kept for the same reason.
+		SDL_PumpEvents();
+
 		SDL_Event ev;
-		while ( SDL_PollEvent( &ev ) )
-		{
-			if ( ev.type == SDL_QUIT )
-				bAbort = true;
-		}
+		if ( SDL_PeepEvents( &ev, 1, SDL_GETEVENT, SDL_QUIT, SDL_QUIT ) > 0 )
+			bAbort = true;
+
+		SDL_FlushEvents( SDL_KEYDOWN, SDL_TEXTINPUT );
+		SDL_FlushEvents( SDL_MOUSEMOTION, SDL_MOUSEWHEEL );
+		SDL_FlushEvents( SDL_JOYAXISMOTION, SDL_JOYBUTTONUP );
+		SDL_FlushEvents( SDL_CONTROLLERAXISMOTION, SDL_CONTROLLERBUTTONUP );
+		SDL_FlushEvents( SDL_FINGERDOWN, SDL_MULTIGESTURE );
 
 		bool bPlaying = pMovie->Update();
 		if ( !bPlaying )
