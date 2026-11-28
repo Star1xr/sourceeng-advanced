@@ -1,3 +1,22 @@
+# This Repo
+Based on nillerusr's source engine base, built to bring Android a SteamOS level experience, both in gameplay feel and visual polish to the Source Engine base.
+Mostly vibecoded, though no trash code is making it into the repo since I actually know C++. The progress is below, also with a detailed treemap.
+
+## Features 
+- GamepadUI (`-gamepadui`) for HL2, Portal, all gamepadui assets on apk so no need for extra files
+- MangoHud (`-mangohud`) exact port with all features, customizable via `mangohud.conf` in your game directory (`srceng` or your custom game files path)
+- Some GamepadUI fixes (key binding fix for mouse and touch)
+- (GamepadUI) Touch menu in settings instead of steam input bs
+- Bink video and bink audio, valve intro (media/valve.bik) with sound, to close it `-novid` or `-nointro`
+
+## Current tasks 
+- (Currently W.I.P) 20th anniversary update fix: Fix Graphics, Shaders & Lighting and Merged episodes (not sure about merged episodes) from 20th anni. update
+- dxvk-native (Tested on csso-android-enhanced. Will implement it here soon and finish it up. It has some glitches, but it boots and runs fast. Needs fixes.)
+
+## Full Progress
+
+![Progress](https://raw.githubusercontent.com/Star1xr/sourceeng-advanced/master/docs/progress.svg)
+
 # Source Engine
 [![GitHub Actions Status](https://github.com/nillerusr/source-engine/actions/workflows/build.yml/badge.svg)](https://github.com/nillerusr/source-engine/actions/workflows/build.yml) [![GitHub Actions Status](https://github.com/nillerusr/source-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/nillerusr/source-engine/actions/workflows/tests.yml)
  Discord: [![Discord Server](https://img.shields.io/discord/672055862608658432.svg)](https://discord.gg/hZRB7WMgGw)
