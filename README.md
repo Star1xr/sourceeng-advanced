@@ -8,10 +8,11 @@ Mostly vibecoded, though no trash code is making it into the repo since I actual
 - Some GamepadUI fixes (key binding fix for mouse and touch)
 - (GamepadUI) Touch menu in settings instead of steam input bs
 - Bink video and bink audio, valve intro (media/valve.bik) with sound, to close it `-novid` or `-nointro`
+- (Can have little bugs, first version) 20th anniversary update fix: Fix Graphics, Shaders & Lighting from 20th anni. update
 
 ## Current tasks 
-- (Currently W.I.P) 20th anniversary update fix: Fix Graphics, Shaders & Lighting and Merged episodes (not sure about merged episodes) from 20th anni. update
 - dxvk-native (Tested on csso-android-enhanced. Will implement it here soon and finish it up. It has some glitches, but it boots and runs fast. Needs fixes.)
+- Merged episodes
 
 ## Full Progress
 
