@@ -1508,6 +1508,10 @@ void CBasePanel::CreateGameMenu()
 	// load settings from config file
 	KeyValues *datafile = new KeyValues("GameMenu");
 	datafile->UsesEscapeSequences( true );	// VGUI uses escape sequences
+	{
+		ConVarRef merged( "merged_games", true );
+		m_bMerged = merged.IsValid() && merged.GetBool() && !GameUI().IsConsoleUI();
+	}
 	if (datafile->LoadFromFile( g_pFullFileSystem, "Resource/GameMenu.res" ) )
 	{
 		m_pGameMenu = RecursiveLoadGameMenu(datafile);
@@ -1524,7 +1528,19 @@ void CBasePanel::CreateGameMenu()
 		m_pGameMenu->SetAlpha( 0 );
 	}
 
-	datafile->deleteThis();
+	if ( m_bMerged )
+	{
+		// keep the script, the game page is rebuilt from it on every page change
+		if ( m_pGameMenuData )
+			m_pGameMenuData->deleteThis();
+		m_pGameMenuData = datafile;
+		m_nMergedPage = 0;
+		RebuildMergedPage();
+	}
+	else
+	{
+		datafile->deleteThis();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1579,6 +1595,13 @@ void CBasePanel::UpdateGameMenus()
 	bool isVREnabled = materials->GetCurrentConfigForVideoCard().m_nVRModeAdapter == materials->GetCurrentAdapter();
 	bool isVRActive = UseVR();
 
+	// a level started without going through the chooser (console, save game...)
+	if ( m_bMerged && isInGame && m_nMergedPage == 0 )
+	{
+		m_nMergedPage = 1;
+		RebuildMergedPage();
+	}
+
 	// iterate all the menu items
 	m_pGameMenu->UpdateMenuItemState( isInGame, isMulti, isInReplay, isVREnabled, isVRActive );
 
@@ -1600,6 +1623,16 @@ CGameMenu *CBasePanel::RecursiveLoadGameMenu(KeyValues *datafile)
 {
 	CGameMenu *menu = new CGameMenu(this, datafile->GetName());
 
+	if ( !m_bMerged )
+		FillGameMenu( menu, datafile, false );
+	else
+		menu->SetSeparatorGap( vgui::scheme()->GetProportionalScaledValue( 10 ) );
+
+	return menu;
+}
+
+void CBasePanel::FillGameMenu( CGameMenu *menu, KeyValues *datafile, bool bBackItem )
+{
 	wchar_t *pString = g_pVGuiLocalize->Find( "#GameUI_Console" );
 
 	if( pString )
@@ -1636,7 +1669,47 @@ CGameMenu *CBasePanel::RecursiveLoadGameMenu(KeyValues *datafile)
 		menu->AddMenuItem(name, label, cmd, this, dat);
 	}
 
-	return menu;
+	if ( bBackItem )
+	{
+		// only outside of a running game ("notsingle" hides it in a single player level)
+		KeyValues *pUserData = new KeyValues( "BackItem", "notsingle", 1 );
+		menu->AddMenuItem( "MergedBack", "BACK", "MergedBack", this, pUserData );
+	}
+}
+
+// The three games, a small gap, then the shared entries.
+void CBasePanel::FillMergedChooser( CGameMenu *menu )
+{
+	menu->AddMenuItem( "MergedHL2", "HALF-LIFE 2", "MergedGame hl2", this );
+	menu->AddMenuItem( "MergedEP1", "HL:2 EPISODE ONE", "MergedGame episodic", this );
+	menu->AddMenuItem( "MergedEP2", "HL:2 EPISODE TWO", "MergedGame ep2", this );
+	menu->AddSeparator();
+	menu->AddMenuItem( "MergedExtras", "EXTRAS", "OpenAchievementsDialog", this );
+	menu->AddMenuItem( "MergedOptions", "OPTIONS", "OpenOptionsDialog", this );
+	menu->AddMenuItem( "MergedQuit", "QUIT", "Quit", this );
+}
+
+void CBasePanel::RebuildMergedPage()
+{
+	if ( !m_bMerged || !m_pGameMenu )
+		return;
+
+	m_pGameMenu->DeleteAllItems();
+	if ( m_nMergedPage == 0 )
+		FillMergedChooser( m_pGameMenu );
+	else
+		FillGameMenu( m_pGameMenu, m_pGameMenuData, true );
+}
+
+void CBasePanel::SetMergedPage( int page )
+{
+	if ( !m_bMerged || m_nMergedPage == page )
+		return;
+
+	m_nMergedPage = page;
+	RebuildMergedPage();
+	m_pGameMenu->InvalidateLayout( true );
+	ArmFirstMenuItem();
 }
 
 //-----------------------------------------------------------------------------
@@ -2033,7 +2106,19 @@ void CBasePanel::OnGameUIActivated()
 //-----------------------------------------------------------------------------
 void CBasePanel::RunMenuCommand(const char *command)
 {
-	if ( !Q_stricmp( command, "OpenGameMenu" ) )
+	if ( m_bMerged && !Q_strnicmp( command, "MergedGame ", 11 ) )
+	{
+		// switch the mounted content, then show that game's own menu. No restart, no map load.
+		char szCmd[96];
+		Q_snprintf( szCmd, sizeof( szCmd ), "merged_switch %s\n", command + 11 );
+		engine->ClientCmd_Unrestricted( szCmd );
+		SetMergedPage( 1 );
+	}
+	else if ( m_bMerged && !Q_stricmp( command, "MergedBack" ) )
+	{
+		SetMergedPage( 0 );
+	}
+	else if ( !Q_stricmp( command, "OpenGameMenu" ) )
 	{
 		if ( m_pGameMenu )
 		{

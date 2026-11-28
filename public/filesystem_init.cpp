@@ -225,6 +225,7 @@ CFSSearchPathsInit::CFSSearchPathsInit()
 	m_pLanguage = NULL;
 	m_ModPath[0] = 0;
 	m_bMountHDContent = m_bLowViolence = false;
+	m_pCollectGamePaths = NULL;
 }
 
 
@@ -562,7 +563,7 @@ FSReturnCode_t FileSystem_LoadSearchPaths( CFSSearchPathsInit &initInfo )
 	#define GAMEINFOPATH_TOKEN		"|gameinfo_path|"
 	#define BASESOURCEPATHS_TOKEN	"|all_source_engine_paths|"
 
-	const char *pszExtraSearchPath = CommandLine()->ParmValue( "-insert_search_path" );
+	const char *pszExtraSearchPath = initInfo.m_pCollectGamePaths ? NULL : CommandLine()->ParmValue( "-insert_search_path" );
 	if ( pszExtraSearchPath )
 	{
 		CUtlStringList vecPaths;
@@ -581,7 +582,7 @@ FSReturnCode_t FileSystem_LoadSearchPaths( CFSSearchPathsInit &initInfo )
 		}
 	}
 
-	const char *ExtraVpkPaths = getenv( "EXTRAS_VPK_PATH" );
+	const char *ExtraVpkPaths = initInfo.m_pCollectGamePaths ? NULL : getenv( "EXTRAS_VPK_PATH" );
 	char szAbsSearchPath[MAX_PATH];
 
 	if( ExtraVpkPaths )
@@ -720,6 +721,27 @@ FSReturnCode_t FileSystem_LoadSearchPaths( CFSSearchPathsInit &initInfo )
 		FOR_EACH_VEC( vecPathIDs, idxPathID )
 		{
 			Q_StripPrecedingAndTrailingWhitespace( vecPathIDs[ idxPathID ] );
+		}
+
+		// Collect-only mode (merged episodes): record the "game" locations, mount nothing.
+		if ( initInfo.m_pCollectGamePaths )
+		{
+			bool bIsGame = false;
+			FOR_EACH_VEC( vecPathIDs, idxPathID )
+			{
+				if ( !V_stricmp( vecPathIDs[ idxPathID ], "game" ) )
+					bIsGame = true;
+			}
+			if ( bIsGame )
+			{
+				FOR_EACH_VEC( vecFullLocationPaths, idxLocation )
+				{
+					char *pCopy = new char[ V_strlen( vecFullLocationPaths[ idxLocation ] ) + 1 ];
+					V_strcpy( pCopy, vecFullLocationPaths[ idxLocation ] );
+					initInfo.m_pCollectGamePaths->AddToTail( pCopy );
+				}
+			}
+			continue;
 		}
 
 		// Mount them.

@@ -1023,6 +1023,24 @@ CON_COMMAND_F( sv_soundemitter_flush, "Flushes the sounds.txt system (server onl
 	S_SoundEmitterSystemFlush( );
 }
 
+
+// Merged episodes: merged_switch changes the mounted content; the sound script
+// manifest depends on it, so rebuild the sound script system (not a cheat command,
+// it is issued by the engine right after the switch).
+#if defined( CLIENT_DLL )
+CON_COMMAND_F( merged_reload_cl, "Reload sound scripts after merged_switch (client)", FCVAR_HIDDEN | FCVAR_DONTRECORD )
+#else
+CON_COMMAND_F( merged_reload_sv, "Reload sound scripts after merged_switch (server)", FCVAR_HIDDEN | FCVAR_DONTRECORD )
+#endif
+{
+	g_SoundEmitterSystem.Shutdown();
+	g_SoundEmitterSystem.Init();
+#if !defined( CLIENT_DLL )
+	g_SoundEmitterSystem.LevelInitPreEntity();
+	ClearModelSoundsCache();
+#endif
+}
+
 #if !defined(_RETAIL)
 
 #if !defined( CLIENT_DLL ) 

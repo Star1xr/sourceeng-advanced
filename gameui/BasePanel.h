@@ -331,6 +331,16 @@ private:
 	void UpdateGameMenus();
 	CGameMenu *RecursiveLoadGameMenu(KeyValues *datafile);
 
+	// Merged episodes (HL2 / EP1 / EP2 in one process): page 0 is the game chooser,
+	// page 1 is the regular GameMenu.res of the game that was picked.
+	void FillGameMenu( CGameMenu *menu, KeyValues *datafile, bool bBackItem );
+	void FillMergedChooser( CGameMenu *menu );
+	void RebuildMergedPage();
+	void SetMergedPage( int page );
+	KeyValues *m_pGameMenuData = NULL;
+	bool m_bMerged = false;
+	int m_nMergedPage = 0;
+
 	void StartExitingProcess();
 
 	bool IsPromptableCommand( const char *command );

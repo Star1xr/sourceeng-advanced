@@ -37,6 +37,8 @@
 #include "vgui_baseui_interface.h"
 #include "tier2/tier2.h"
 #include "language.h"
+#include "cmd.h"
+#include "materialsystem/imaterialsystem.h"
 #ifndef SWDS
 #include "cl_steamauth.h"
 #endif
@@ -863,6 +865,15 @@ bool BLoadHDContent( const char *pchModDir, const char *pchBaseDir )
 
 extern void Host_CheckGore( void );
 
+// Merged episodes state (see merged_switch below)
+static bool g_bMergedHDContent = false;
+static char g_szMergedLanguage[128] = "";
+// 1 when hl2, episodic and ep2 are installed side by side and the process was started on hl2.
+// The menus build their merged game list from these.
+static ConVar merged_games( "merged_games", "0", FCVAR_HIDDEN | FCVAR_DONTRECORD, "1 if merged episodes are available" );
+static ConVar merged_current( "merged_current", "hl2", FCVAR_HIDDEN | FCVAR_DONTRECORD, "Game currently selected by merged_switch" );
+static void MergedDetect();
+
 /*
 ================
 COM_InitFilesystem
@@ -928,6 +939,8 @@ void COM_InitFilesystem( const char *pFullModPath )
 
 	initInfo.m_bLowViolence = g_bLowViolence;
 	initInfo.m_bMountHDContent = BLoadHDContent( initInfo.m_pDirectoryName, GetBaseDirectory() );
+	g_bMergedHDContent = initInfo.m_bMountHDContent;
+	V_strcpy_safe( g_szMergedLanguage, initInfo.m_pLanguage ? initInfo.m_pLanguage : "" );
 
 	// Load gameinfo.txt and setup all the search paths, just like the tools do.
 	FileSystem_LoadSearchPaths( initInfo );
@@ -935,6 +948,8 @@ void COM_InitFilesystem( const char *pFullModPath )
 	// The mod path becomes com_gamedir.
 	Q_MakeAbsolutePath( com_gamedir, sizeof( com_gamedir ), initInfo.m_ModPath );
 							  	
+	MergedDetect();
+
 	// Set com_basedir.
 	Q_strncpy ( com_basedir, GetBaseDirectory(), sizeof( com_basedir ) ); // the "root" directory where hl2.exe is
 	Q_strlower( com_basedir );
@@ -950,6 +965,183 @@ void COM_InitFilesystem( const char *pFullModPath )
 //	g_pFileSystem->PrintSearchPaths();
 
 }
+
+
+
+static void MergedDetect()
+{
+	merged_games.SetValue( 0 );
+	if ( CommandLine()->FindParm( "-nomerged" ) )
+		return;
+
+	char szBase[MAX_PATH], szName[MAX_PATH], szInfo[MAX_PATH];
+	V_strcpy_safe( szBase, com_gamedir );
+	V_StripTrailingSlash( szBase );
+	V_FileBase( szBase, szName, sizeof( szName ) );
+	if ( V_stricmp( szName, "hl2" ) )
+		return;
+	V_StripLastDir( szBase, sizeof( szBase ) );
+	V_StripTrailingSlash( szBase );
+
+	static const char *s_Games[] = { "episodic", "ep2" };
+	for ( int i = 0; i < 2; i++ )
+	{
+		V_snprintf( szInfo, sizeof( szInfo ), "%s%c%s%cgameinfo.txt", szBase, CORRECT_PATH_SEPARATOR, s_Games[i], CORRECT_PATH_SEPARATOR );
+		if ( !g_pFileSystem->FileExists( szInfo ) )
+			return;
+	}
+	merged_games.SetValue( 1 );
+	Msg( "Merged episodes available (hl2 + episodic + ep2 in %s)\n", szBase );
+}
+
+//-----------------------------------------------------------------------------
+// Merged episodes: HL2 / Episode One / Episode Two in one process.
+//
+// merged_switch <hl2|episodic|ep2> re-targets the "game" search paths at the
+// chosen game without restarting. The base (hl2) mount that the engine started
+// with is never touched, so everything already loaded or streaming from it
+// stays valid. Only the episode-specific locations that the target gameinfo.txt
+// adds on top of it (episodic/*, ep2/*, their vpks) are mounted or unmounted.
+//-----------------------------------------------------------------------------
+static CUtlVector< char * > g_MergedAddedPaths;	// paths this command mounted, head first
+static char g_szMergedCurrent[64] = "";
+
+static void MergedFreePaths( CUtlVector< char * > &v )
+{
+	for ( int i = 0; i < v.Count(); i++ )
+		delete [] v[i];
+	v.Purge();
+}
+
+static bool MergedPathListed( const CUtlVector< char * > &v, const char *pPath )
+{
+	for ( int i = 0; i < v.Count(); i++ )
+	{
+		if ( !V_stricmp( v[i], pPath ) )
+			return true;
+	}
+	return false;
+}
+
+static void MergedSwitch_f( const CCommand &args )
+{
+	if ( args.ArgC() < 2 )
+	{
+		ConMsg( "Usage: merged_switch <hl2|episodic|ep2>   (current: %s)\n", g_szMergedCurrent[0] ? g_szMergedCurrent : "hl2" );
+		return;
+	}
+
+	const char *pName = args.Arg( 1 );
+	if ( V_stricmp( pName, "hl2" ) && V_stricmp( pName, "episodic" ) && V_stricmp( pName, "ep2" ) )
+	{
+		ConMsg( "merged_switch: unknown game '%s'\n", pName );
+		return;
+	}
+
+	if ( !V_stricmp( g_szMergedCurrent[0] ? g_szMergedCurrent : "hl2", pName ) )
+		return;
+
+	// <base>/<game>: the parent of the directory we started in
+	char szBase[MAX_PATH];
+	V_strcpy_safe( szBase, com_gamedir );
+	V_StripTrailingSlash( szBase );
+	V_StripLastDir( szBase, sizeof( szBase ) );
+	V_StripTrailingSlash( szBase );
+
+	char szTarget[MAX_PATH];
+	V_snprintf( szTarget, sizeof( szTarget ), "%s%c%s", szBase, CORRECT_PATH_SEPARATOR, pName );
+
+	CUtlVector< char * > desired;
+	if ( V_stricmp( pName, "hl2" ) )
+	{
+		char szInfo[MAX_PATH];
+		V_snprintf( szInfo, sizeof( szInfo ), "%s%cgameinfo.txt", szTarget, CORRECT_PATH_SEPARATOR );
+		if ( !g_pFileSystem->FileExists( szInfo ) )
+		{
+			Warning( "merged_switch: %s not found, staying on %s\n", szInfo, g_szMergedCurrent[0] ? g_szMergedCurrent : "hl2" );
+			return;
+		}
+
+		CFSSearchPathsInit info;
+		info.m_pFileSystem = g_pFileSystem;
+		info.m_pDirectoryName = szTarget;
+		info.m_pLanguage = g_szMergedLanguage[0] ? g_szMergedLanguage : NULL;
+		info.m_bMountHDContent = g_bMergedHDContent;
+		info.m_bLowViolence = g_bLowViolence;
+		info.m_pCollectGamePaths = &desired;
+		if ( FileSystem_LoadSearchPaths( info ) != FS_OK )
+		{
+			Warning( "merged_switch: could not read %s\n", szInfo );
+			MergedFreePaths( desired );
+			return;
+		}
+	}
+
+	// What is mounted right now (without the pack files the vpk objects own)
+	char szCur[16384];
+	g_pFileSystem->GetSearchPath( "GAME", true, szCur, sizeof( szCur ) );
+	CUtlStringList curList;
+	V_SplitString( szCur, ";", curList );
+	CUtlVector< char * > current;
+	FOR_EACH_VEC( curList, ci )
+		current.AddToTail( curList[ci] );
+
+	// 1) unmount what an earlier switch added and the new target does not want
+	for ( int i = g_MergedAddedPaths.Count() - 1; i >= 0; i-- )
+	{
+		if ( !MergedPathListed( desired, g_MergedAddedPaths[i] ) )
+		{
+			g_pFileSystem->RemoveSearchPath( g_MergedAddedPaths[i], "GAME" );
+			delete [] g_MergedAddedPaths[i];
+			g_MergedAddedPaths.Remove( i );
+		}
+	}
+
+	// 2) mount what is new, last-to-first at the head so the priority order is kept
+	for ( int i = desired.Count() - 1; i >= 0; i-- )
+	{
+		if ( MergedPathListed( current, desired[i] ) || MergedPathListed( g_MergedAddedPaths, desired[i] ) )
+			continue;
+		g_pFileSystem->AddSearchPath( desired[i], "GAME", PATH_ADD_TO_HEAD );
+		char *pCopy = new char[ V_strlen( desired[i] ) + 1 ];
+		V_strcpy( pCopy, desired[i] );
+		g_MergedAddedPaths.AddToTail( pCopy );
+	}
+
+	MergedFreePaths( desired );
+
+	V_strcpy_safe( g_szMergedCurrent, pName );
+	merged_current.SetValue( pName );
+
+	// The game DLL behaves differently for the episodic games; plain HL2 keeps the original behaviour.
+	ConVarRef hl2_episodic( "hl2_episodic" );
+	if ( hl2_episodic.IsValid() )
+		hl2_episodic.SetValue( V_stricmp( pName, "hl2" ) ? 1 : 0 );
+
+	// Things that read the game dir: com_gamedir and -game
+	V_strcpy_safe( com_gamedir, szTarget );
+	V_FixSlashes( com_gamedir );
+	if ( CommandLine()->FindParm( "-game" ) )
+		CommandLine()->RemoveParm( "-game" );
+	CommandLine()->AppendParm( "-game", szTarget );
+
+	// Content caches
+	materials->UncacheUnusedMaterials();
+
+	if ( g_pVGuiLocalize )
+	{
+		g_pVGuiLocalize->AddFile( "resource/valve_%language%.txt", "GAME", true );
+		char szLoc[64];
+		V_snprintf( szLoc, sizeof( szLoc ), "resource/%s_%%language%%.txt", pName );
+		g_pVGuiLocalize->AddFile( szLoc, "GAME", true );
+	}
+
+	// game_sounds_manifest differs per game: restart the sound script systems of the game DLLs
+	Cbuf_AddText( "merged_reload_cl\nmerged_reload_sv\n" );
+
+	ConMsg( "merged_switch: now %s\n", pName );
+}
+static ConCommand merged_switch( "merged_switch", MergedSwitch_f, "Switch between merged HL2 / episodic / ep2 content without restarting.", FCVAR_DONTRECORD );
 
 const char *COM_DXLevelToString( int dxlevel )
 {

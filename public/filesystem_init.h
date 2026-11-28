@@ -159,6 +159,11 @@ public:
 	bool m_bMountHDContent;
 	bool m_bLowViolence;
 
+	// Merged episodes: when set, nothing is mounted. The absolute locations of every
+	// "game" search path in gameinfo.txt are appended to *m_pCollectGamePaths instead,
+	// in priority order (first = highest).
+	CUtlVector< char * > *m_pCollectGamePaths;
+
 // Outputs.
 public:
 	// This is the location of the first search path called "game", which also becomes your "mod" search path.

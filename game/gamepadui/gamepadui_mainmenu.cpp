@@ -7,6 +7,7 @@
 #include "vgui/IVGui.h"
 
 #include "KeyValues.h"
+#include "convar.h"
 #include "filesystem.h"
 
 #include "inputsystem/iinputsystem.h"
@@ -146,6 +147,42 @@ void GamepadUIMainMenu::LoadMenuButtons()
         pDataFile->deleteThis();
     }
 
+    {
+        ConVarRef merged( "merged_games", true );
+        m_bMerged = merged.IsValid() && merged.GetBool();
+    }
+
+    if ( m_bMerged )
+    {
+        // Priority is ascending from the bottom of the screen (QUIT is lowest).
+        // The page buttons live in their own lists, so switching pages is just a visibility swap.
+        struct MergedEntry_t { const char *pText; const char *pCommand; int nPriority; };
+        static const MergedEntry_t s_Chooser[] =
+        {
+            { "QUIT",             "cmd gamepadui_openquitgamedialog",        1 },
+            { "OPTIONS",          "cmd gamepadui_openoptionsdialog",         2 },
+            { "EXTRAS",           "cmd gamepadui_openachievementsdialog",    3 },
+            { "HL:2 EPISODE TWO", "merged ep2",                              4 },
+            { "HL:2 EPISODE ONE", "merged episodic",                         5 },
+            { "HALF-LIFE 2",      "merged hl2",                              6 },
+        };
+        for ( const MergedEntry_t &e : s_Chooser )
+        {
+            GamepadUIButton *pButton = new GamepadUIButton( this, this, GAMEPADUI_MAINMENU_SCHEME, e.pCommand, e.pText, "" );
+            pButton->SetPriority( e.nPriority );
+            pButton->SetVisible( false );
+            m_Buttons[ GamepadUIMenuStates::Chooser ].AddToTail( pButton );
+        }
+
+        // Back to the game list, shown at the top of a game's own menu (not in a level)
+        GamepadUIButton *pBack = new GamepadUIButton( this, this, GAMEPADUI_MAINMENU_SCHEME, "mergedback", "BACK", "" );
+        pBack->SetPriority( 100 );
+        pBack->SetVisible( false );
+        m_Buttons[ GamepadUIMenuStates::MainMenu ].AddToTail( pBack );
+
+        m_bMergedChooser = true;
+    }
+
     m_pConsoleIcon = new GamepadUIConsoleIcon( this );
 
     UpdateButtonVisibility();
@@ -246,6 +283,20 @@ void GamepadUIMainMenu::OnCommand( char const* pCommand )
         if ( *pszClientCmd )
             GamepadUI::GetInstance().GetEngineClient()->ClientCmd_Unrestricted( pszClientCmd );
     }
+    else if ( m_bMerged && StringHasPrefixCaseSensitive( pCommand, "merged " ) )
+    {
+        // Switch the mounted content (no restart, no map load) and show that game's own menu
+        char szCmd[96];
+        V_snprintf( szCmd, sizeof( szCmd ), "merged_switch %s", &pCommand[ 7 ] );
+        GamepadUI::GetInstance().GetEngineClient()->ClientCmd_Unrestricted( szCmd );
+        m_bMergedChooser = false;
+        OnMenuStateChanged();
+    }
+    else if ( m_bMerged && !V_strcmp( pCommand, "mergedback" ) )
+    {
+        m_bMergedChooser = true;
+        OnMenuStateChanged();
+    }
     else
     {
         BaseClass::OnCommand( pCommand );
@@ -322,6 +373,8 @@ GamepadUIMenuState GamepadUIMainMenu::GetCurrentMenuState() const
 {
     if ( GamepadUI::GetInstance().IsInLevel() )
         return GamepadUIMenuStates::InGame;
+    if ( m_bMerged && m_bMergedChooser )
+        return GamepadUIMenuStates::Chooser;
     return GamepadUIMenuStates::MainMenu;
 }
 

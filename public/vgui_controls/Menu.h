@@ -144,6 +144,8 @@ public:
 
 	virtual void AddSeparator();
 	virtual void AddSeparatorAfterItem( int itemID );
+	// Turns separators into plain gaps of the given height (0 = keep the default drawn line)
+	void SetSeparatorGap( int tall ) { m_iSeparatorGap = tall; }
 
 	// Sets the values of a menu item at the specified index
 	virtual void UpdateMenuItem(int itemID, const char *itemText,KeyValues *message, const KeyValues *userData = NULL);
@@ -315,6 +317,7 @@ private:
 	MenuItem *GetParentMenuItem();
 
 	int 			m_iMenuItemHeight;
+	int 			m_iSeparatorGap = 0;
 	int 			m_iFixedWidth;
 	int 			m_iMinimumWidth; // a minimum width the menu has to be if it is not fixed width
 	int 			m_iNumVisibleLines;	// number of items in menu before scroll bar adds on

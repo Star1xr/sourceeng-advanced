@@ -14,4 +14,4 @@ if command -v ccache >/dev/null 2>&1; then
     CCACHE_OPT="--use-ccache"
 fi
 
-LINKFLAGS="-Wl,--strip-all" CXXFLAGS="-fexceptions" CFLAGS="-fexceptions" ./waf configure -T release --android=aarch64,4.9,21 --togles --disable-warns $CCACHE_OPT && ./waf build
+LINKFLAGS="-Wl,--strip-all" CXXFLAGS="-fexceptions" CFLAGS="-fexceptions" ./waf configure -T release --android=aarch64,4.9,21 --togles --build-games=episodic --disable-warns $CCACHE_OPT && ./waf build

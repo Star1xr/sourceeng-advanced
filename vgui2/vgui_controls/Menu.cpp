@@ -702,7 +702,7 @@ int Menu::ComputeFullMenuHeightWithInsets()
 	int ileft, iright, itop, ibottom;
 	GetInset(ileft, iright, itop, ibottom);
 
-	int separatorHeight = 3;
+	int separatorHeight = m_iSeparatorGap ? m_iSeparatorGap : 3;
 
 	// add up the size of all the child panels
 	// move the child panels to the correct place in the menu
@@ -807,7 +807,7 @@ void Menu::PerformLayout()
 	{
 		trueW -= m_pScroller->GetWide();
 	}
-	int separatorHeight = MENU_SEPARATOR_HEIGHT;
+	int separatorHeight = m_iSeparatorGap ? m_iSeparatorGap : MENU_SEPARATOR_HEIGHT;
 
 	// add up the size of all the child panels
 	// move the child panels to the correct place in the menu
@@ -857,7 +857,7 @@ void Menu::PerformLayout()
 		{
 			MenuSeparator *sep = m_SeparatorPanels[ sepIndex ];
 			Assert( sep );
-			sep->SetVisible( true );
+			sep->SetVisible( m_iSeparatorGap == 0 );
 			sep->SetBounds( 0, menuTall, trueW, separatorHeight );
 			menuTall += separatorHeight;
 			totalTall += separatorHeight;
@@ -1109,7 +1109,7 @@ void Menu::MakeItemsVisibleInScrollRange( int maxVisibleItems, int nNumPixelsAva
 		int sepIndex = m_Separators.Find( itemId );
 		if ( sepIndex != m_Separators.InvalidIndex() )
 		{
-			itemHeight += MENU_SEPARATOR_HEIGHT;
+			itemHeight += m_iSeparatorGap ? m_iSeparatorGap : MENU_SEPARATOR_HEIGHT;
 		}
 
 		if ( tall + itemHeight > nNumPixelsAvailable )

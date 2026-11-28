@@ -16,6 +16,7 @@ namespace GamepadUIMenuStates
     {
         InGame,
         MainMenu,
+        Chooser,    // merged episodes: HL2 / EP1 / EP2 / EXTRAS / OPTIONS / QUIT
 
         Count
     };
@@ -55,6 +56,10 @@ private:
     CUtlVector<GamepadUIButton*> m_Buttons[ GamepadUIMenuStates::Count ];
 
     GamepadUIConsoleIcon *m_pConsoleIcon = NULL;
+
+    // merged episodes
+    bool m_bMerged = false;
+    bool m_bMergedChooser = false;
 
     GamepadUIString m_LogoText[ 2 ];
     GamepadUIImage  m_LogoImage;
