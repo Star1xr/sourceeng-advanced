@@ -1,12 +1,15 @@
 name: Build
 on:
   push:
-    paths-ignore: &docs
+    paths-ignore:
       - '**.md'
       - 'docs/**'
       - 'LICENSE'
   pull_request:
-    paths-ignore: *docs
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 jobs:
   build-android:
